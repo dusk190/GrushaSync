@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:untitled3333333/screens/MyFilesPage.dart';
 import 'package:untitled3333333/screens/MyHomePage.dart';
 
 class MyApp extends StatefulWidget {
@@ -18,6 +19,7 @@ class MyAppState extends State<MyApp> {
     );
 
     return MaterialApp(
+
         themeMode: myThemeMode,
         theme: ThemeData(
           brightness: Brightness.light,
@@ -47,6 +49,7 @@ class MyAppState extends State<MyApp> {
 
         debugShowCheckedModeBanner: false,
         home: MyHomePage(changeTheme: changeTheme)
+        //home: MyFilesPage(),
     );
   }
 

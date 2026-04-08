@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 
-class MyDeviceFolder extends StatefulWidget {
-  final String _deviceName;
+class MyFile extends StatefulWidget {
+  final String _fileName;
+  final String _fileExtension;
 
-  const MyDeviceFolder(this._deviceName, {super.key});
+  const MyFile(this._fileName, this._fileExtension, {super.key});
 
   @override
-  createState() => MyDeviceFolderState();
+  createState() => MyFileState();
 }
 
-class MyDeviceFolderState extends State<MyDeviceFolder> {
-
-  bool deviceConnected = true;
+class MyFileState extends State<MyFile> {
 
   @override
   Widget build(BuildContext context) {
@@ -28,12 +27,12 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
         ),
         elevation: 0,
       ),
-      onPressed: availToFalse, //потом поменять на навигацию в экран со списком файлов
+      onPressed: openFile, //потом поменять на открытие файла
       child: Row(
         children: [
           Expanded(
             child: Text(
-              widget._deviceName,
+              widget._fileName,
               style: Theme.of(context).textTheme.bodyMedium,
               textAlign: TextAlign.left,
               overflow: TextOverflow.ellipsis,
@@ -42,28 +41,17 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
           ),
           const SizedBox(width: 16),
           // кружочек
-          Container(
-            width: 25,
-            height: 25,
-            decoration: BoxDecoration(
-              color: deviceConnected ? const Color(0xff3bff28) : const Color(0xffd33535),
-              shape: BoxShape.circle,
-            ),
+          Text(
+            widget._fileExtension,
+            style: Theme.of(context).textTheme.bodyMedium,
+            textAlign: TextAlign.right,
           ),
         ],
       ),
     ));
   }
 
-  void availToFalse () {
-    setState(() {
-      deviceConnected = false;
-    });
+  void openFile () {
+
   }
-  /*
-  void availToTrue () {
-    setState(() {
-      deviceAvailable = true;
-    });
-  } */
 }
