@@ -17,7 +17,7 @@ class MyHomePageState extends State<MyHomePage> {
     'Acer m54',
     'Pixel 6'
   ];*/
-  List<String> currentDevices = List.filled(1500, "Nokia 100400", growable: true);
+  List<String> currentDevices = List.filled(15, "Nokia 100400", growable: true);
   List<String> availableDevices = ['Poco3', 'Smartfon vivo', 'Ipod2', 'Macbok'];
 
   @override

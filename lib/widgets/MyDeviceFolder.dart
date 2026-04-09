@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:untitled3333333/screens/MyFilesPage.dart';
 
 class MyDeviceFolder extends StatefulWidget {
   final String _deviceName;
@@ -10,7 +11,7 @@ class MyDeviceFolder extends StatefulWidget {
 }
 
 class MyDeviceFolderState extends State<MyDeviceFolder> {
-
+  Map<String, String> files = {"hi": ".jpg", "kitties": ".png", "opred_intergal": "pptx"};
   bool deviceConnected = true;
 
   @override
@@ -28,7 +29,7 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
         ),
         elevation: 0,
       ),
-      onPressed: availToFalse, //потом поменять на навигацию в экран со списком файлов
+      onPressed: () {enterFolder();}, //потом поменять на навигацию в экран со списком файлов
       child: Row(
         children: [
           Expanded(
@@ -53,6 +54,15 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
         ],
       ),
     ));
+  }
+
+  void enterFolder() {
+    Navigator.push(context, PageRouteBuilder(
+        pageBuilder: (context, anim, secAnim) => MyFilesPage(files: files),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
   }
 
   void availToFalse () {

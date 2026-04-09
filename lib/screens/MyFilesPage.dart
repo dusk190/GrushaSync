@@ -4,15 +4,15 @@ import 'package:untitled3333333/widgets/FileSelectionDialog.dart';
 import 'package:untitled3333333/widgets/FileSortDialog.dart';
 
 class MyFilesPage extends StatefulWidget {
-  const MyFilesPage({super.key});
+  final Map<String, String> files;
+  const MyFilesPage({super.key, required this.files});
 
   @override
   createState() => MyFilesPageState();
 }
 
 class MyFilesPageState extends State<MyFilesPage> {
-  List<String> files = ["hi", "kitties", "opred_intergal"];
-  List<String> extensions = [".jpg", ".png", ".pptx"];
+
   /*
   List<String> files = List.filled(8, "bobs", growable: true);
   List<String> extensions = List.filled(8, ".jpg", growable: true);
@@ -27,7 +27,7 @@ class MyFilesPageState extends State<MyFilesPage> {
             IconButton(
               padding: EdgeInsets.only(left:10),
               icon: Icon(Icons.arrow_back_ios),
-              onPressed: () {},
+              onPressed: () {Navigator.pop(context);},
               ),
             const SizedBox(width: 5),
             IconButton(
@@ -59,10 +59,10 @@ class MyFilesPageState extends State<MyFilesPage> {
 
         body: ListView.builder(
             padding: EdgeInsets.all(14),
-            itemCount: files.length,
+            itemCount: widget.files.length,
             itemBuilder: (context, index) {
-              final fileName = files[index];
-              final fileExt = extensions[index];
+              final fileName = widget.files.keys.elementAt(index);
+              final fileExt = widget.files.values.elementAt(index);
               return Padding(
                 padding: EdgeInsets.only(bottom: 12),
                 child: MyFile(fileName, fileExt),
