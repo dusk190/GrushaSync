@@ -11,7 +11,6 @@ class MyDeviceFolder extends StatefulWidget {
 }
 
 class MyDeviceFolderState extends State<MyDeviceFolder> {
-  Map<String, String> files = {"hi": ".jpg", "kitties": ".png", "opred_intergal": "pptx"};
   bool deviceConnected = true;
 
   @override
@@ -29,7 +28,7 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
         ),
         elevation: 0,
       ),
-      onPressed: () {enterFolder();}, //потом поменять на навигацию в экран со списком файлов
+      onPressed: () {enterFolder(widget._deviceName);},
       child: Row(
         children: [
           Expanded(
@@ -56,9 +55,9 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
     ));
   }
 
-  void enterFolder() {
+  void enterFolder(String devicename) {
     Navigator.push(context, PageRouteBuilder(
-        pageBuilder: (context, anim, secAnim) => MyFilesPage(files: files),
+        pageBuilder: (context, anim, secAnim) => MyFilesPage(devicename),
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
       ),

@@ -27,7 +27,7 @@ class MyFileState extends State<MyFile> {
         ),
         elevation: 0,
       ),
-      onPressed: openFile, //потом поменять на открытие файла
+      onPressed: openFile, //потом поменять на ?вывод инфы о файле/удаление из выбранных?
       child: Row(
         children: [
           Expanded(

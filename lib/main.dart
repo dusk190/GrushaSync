@@ -24,8 +24,8 @@ class MyAppState extends State<MyApp> {
           brightness: Brightness.light,
           textTheme: myTextTheme,
           colorScheme: ColorScheme.light(
-              primary: Color(0xff8e8e8e),
-              secondary: Color(0xffffffff),
+              primary: Color(0xff8f8f8f),
+              secondary: Color(0xfff4f4f4),
               surface: Color(0xffe6e6e6)
           ),
         ),

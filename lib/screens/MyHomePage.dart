@@ -17,7 +17,9 @@ class MyHomePageState extends State<MyHomePage> {
     'Acer m54',
     'Pixel 6'
   ];*/
-  List<String> currentDevices = List.filled(15, "Nokia 100400", growable: true);
+  List<String> currentDevices = List.filled(3, "Nokia 100400", growable: true);
+
+  // сюда втыкать бек поиск устройств будем
   List<String> availableDevices = ['Poco3', 'Smartfon vivo', 'Ipod2', 'Macbok'];
 
   @override
@@ -31,8 +33,15 @@ class MyHomePageState extends State<MyHomePage> {
               ), SizedBox(width: 5,)
             ],
             titleTextStyle: Theme.of(context).textTheme.displayLarge,
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            title: Text("mcDonol")),
+            backgroundColor: Theme.of(context).colorScheme.secondary,
+            title: Text("GrushaSync"),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(2),
+              child: Container(
+                color: Theme.of(context).colorScheme.primary,
+                height: 2,
+              ),)
+        ),
 
         body: ListView.builder(
             padding: EdgeInsets.all(14),
