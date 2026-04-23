@@ -187,26 +187,61 @@ class DualModeService extends ChangeNotifier {
 
   // Обработка запроса на скачивание
   Future<void> _handleDownloadRequest(HttpRequest request, String filename) async {
-    final file = _mySharedFiles.firstWhere(
-          (f) => f.name == filename,
-      orElse: () => throw Exception('File not found'),
-    );
+    try {
+      // Ищем файл в списке общих файлов
+      final fileInfo = _mySharedFiles.firstWhere(
+            (f) => f.name == filename,
+        orElse: () => throw Exception('File not found'),
+      );
 
-    final fileObj = File(file.path);
-    if (!await fileObj.exists()) {
+      final file = File(fileInfo.path);
+
+      //Проверяем существование файла
+      if (!await file.exists()) {
+        if (kDebugMode) {
+          print('Файл не найден: ${fileInfo.path}');
+        }
+        request.response
+          ..statusCode = 404
+          ..write('File not found')
+          ..close();
+        return;
+      }
+
+      //Получаем размер файла
+      final fileSize = await file.length();
+
+      // Кодируем имя файла для HTTP заголовка (поддержка кириллицы)
+      final encodedFilename = Uri.encodeComponent(filename);
+
+      // Настраиваем заголовки ответа
       request.response
-        ..statusCode = 404
-        ..write('File not found')
-        ..close();
-      return;
-    }
+        ..statusCode = 200
+        ..headers.contentType = ContentType.binary
+        ..headers.add('Content-Disposition', 'attachment; filename*=UTF-8\'\'$encodedFilename')
+        ..headers.add('Content-Length', fileSize.toString());
 
-    request.response
-      ..statusCode = 200
-      ..headers.contentType = ContentType.binary
-      ..headers.add('Content-Disposition', 'attachment; filename="$filename"')
-      ..add(await fileObj.readAsBytes())
-      ..close();
+      // Отправляем файл стримом
+      final stream = file.openRead();
+      await request.response.addStream(stream);
+      await request.response.close();
+
+      if (kDebugMode) {
+        print('Файл отправлен: $filename (${_formatSize(fileSize)})');
+      }
+
+    } catch (e) {
+      if (kDebugMode) {
+        print('Ошибка отправки файла $filename: $e');
+      }
+
+      try {
+        request.response
+          ..statusCode = 500
+          ..write('Internal Server Error')
+          ..close();
+      } catch (_) {}
+    }
   }
 
 
