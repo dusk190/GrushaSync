@@ -22,13 +22,37 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'GrushaSync',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      home: const MainScreen(),
-      debugShowCheckedModeBanner: false,
+
+        themeMode: myThemeMode,
+        theme: ThemeData(
+          brightness: Brightness.light,
+          textTheme: myTextTheme,
+          colorScheme: ColorScheme.light(
+              primary: Color(0xff8f8f8f),
+              secondary: Color(0xfff4f4f4),
+              surface: Color(0xffe6e6e6)
+          ),
+        ),
+
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+          textTheme: myTextTheme,
+          colorScheme: ColorScheme.dark(
+            primary: Color(0xff4e4e6a),
+            onPrimary: Colors.white,
+
+            //0xff313157
+            secondary: Color(0xff383851),
+            onSecondary: Colors.white,
+
+            surface: Color(0xff2b2b35),
+          ),
+
+        ),
+
+        debugShowCheckedModeBanner: false,
+        home: MyHomePage(changeTheme: changeTheme)
+        //home: MyFilesPage(),
     );
   }
 }
