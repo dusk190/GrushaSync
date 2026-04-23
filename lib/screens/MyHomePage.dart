@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:untitled3333333/widgets/MyDeviceFolder.dart';
-import 'package:untitled3333333/widgets/DeviceSelectionDialog.dart';
+import 'package:provider/provider.dart';
+import '../services/dualModeService.dart';
 
 class MyHomePage extends StatefulWidget {
   final VoidCallback changeTheme;
@@ -11,19 +12,21 @@ class MyHomePage extends StatefulWidget {
 }
 
 class MyHomePageState extends State<MyHomePage> {
-  /*List<String> currentDevices = [
-    'Xiaomi Mi 11 Xiaomi Mi 11 Xiaomi Mi 11 Xiaomi Mi 11',
-    'iPhone 13',
-    'Acer m54',
-    'Pixel 6'
-  ];*/
-  List<String> currentDevices = List.filled(3, "Nokia 100400", growable: true);
-
-  // сюда втыкать бек поиск устройств будем
-  List<String> availableDevices = ['Poco3', 'Smartfon vivo', 'Ipod2', 'Macbok'];
+  @override
+  void initState() {
+    super.initState();
+    // Инициализация сервиса при старте экрана
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final service = Provider.of<DualModeService>(context, listen: false);
+      service.initialize();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final service = Provider.of<DualModeService>(context);
+    final peers = service.peers;
+
     return Scaffold(
         appBar: AppBar(
             actions: [
@@ -44,16 +47,16 @@ class MyHomePageState extends State<MyHomePage> {
         ),
 
         body: ListView.builder(
-            padding: EdgeInsets.all(14),
-            itemCount: currentDevices.length,
+            padding: const EdgeInsets.all(14),
+            itemCount: peers.length,
             itemBuilder: (context, index) {
-              final deviceName = currentDevices[index];
+              final peer = peers[index];
               return Padding(
-                padding: EdgeInsets.only(bottom: 12),
-                child: MyDeviceFolder(deviceName),
+                padding: const EdgeInsets.only(bottom: 12),
+                child: MyDeviceFolder(peer),
               );
             }),
-
+        /*
         floatingActionButton: FloatingActionButton(
             onPressed: () async {
               final String? selectedName = await showDialog<String>(
@@ -69,7 +72,7 @@ class MyHomePageState extends State<MyHomePage> {
               },
           tooltip: 'Добавить устройство',
           child: const Icon(Icons.add),
-        )
+        ),*/
     );
   }
 }

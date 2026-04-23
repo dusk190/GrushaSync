@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:untitled3333333/screens/MyFilesPage.dart';
+import 'package:untitled3333333/services/dualModeService.dart';
 
 class MyDeviceFolder extends StatefulWidget {
-  final String _deviceName;
+  final PeerDevice peer;
 
-  const MyDeviceFolder(this._deviceName, {super.key});
+  const MyDeviceFolder(this.peer, {super.key});
 
   @override
   createState() => MyDeviceFolderState();
@@ -28,20 +29,31 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
         ),
         elevation: 0,
       ),
-      onPressed: () {enterFolder(widget._deviceName);},
-      child: Row(
+      onPressed: () => enterFolder(widget.peer),
+      child:
+      Row(
         children: [
           Expanded(
-            child: Text(
-              widget._deviceName,
-              style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: TextAlign.left,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  widget.peer.name,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  textAlign: TextAlign.left,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                Text(
+                  '${widget.peer.host}:${widget.peer.port}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 16),
-          // кружочек
           Container(
             width: 25,
             height: 25,
@@ -52,24 +64,25 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
           ),
         ],
       ),
-    ));
+    )
+    );
   }
 
-  void enterFolder(String devicename) {
+  void enterFolder(PeerDevice peer) {
     Navigator.push(context, PageRouteBuilder(
-        pageBuilder: (context, anim, secAnim) => MyFilesPage(devicename),
+        pageBuilder: (context, anim, secAnim) => MyFilesPage(peer),
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
       ),
     );
   }
-
+/*
   void availToFalse () {
     setState(() {
       deviceConnected = false;
     });
   }
-  /*
+
   void availToTrue () {
     setState(() {
       deviceAvailable = true;
