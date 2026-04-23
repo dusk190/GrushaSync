@@ -3,6 +3,8 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  nsd_windows
+  permission_handler_windows
   downloadsfolder
 )
 
