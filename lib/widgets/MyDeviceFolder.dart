@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:untitled3333333/screens/MyFilesPage.dart';
 
 class MyDeviceFolder extends StatefulWidget {
   final String _deviceName;
@@ -10,9 +11,7 @@ class MyDeviceFolder extends StatefulWidget {
 }
 
 class MyDeviceFolderState extends State<MyDeviceFolder> {
-
-  bool deviceAvailable = true;
-
+  bool deviceConnected = true;
 
   @override
   Widget build(BuildContext context) {
@@ -24,12 +23,12 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
             side: BorderSide(
-                color: Theme.of(context).colorScheme.primary, width: 1
+                color: Theme.of(context).colorScheme.primary, width: 2
             )
         ),
         elevation: 0,
       ),
-      onPressed: availToFalse, //потом поменять на навигацию в экран со списком файлов
+      onPressed: () {enterFolder(widget._deviceName);},
       child: Row(
         children: [
           Expanded(
@@ -37,9 +36,8 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
               widget._deviceName,
               style: Theme.of(context).textTheme.bodyMedium,
               textAlign: TextAlign.left,
-              // 2. Добавляем обрезку текста, если он слишком длинный
               overflow: TextOverflow.ellipsis,
-              maxLines: 1, // Чтобы текст всегда был в одну строку
+              maxLines: 1,
             ),
           ),
           const SizedBox(width: 16),
@@ -48,7 +46,7 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
             width: 25,
             height: 25,
             decoration: BoxDecoration(
-              color: deviceAvailable ? const Color(0xff3bff28) : const Color(0xffd33535),
+              color: deviceConnected ? const Color(0xff3bff28) : const Color(0xffd33535),
               shape: BoxShape.circle,
             ),
           ),
@@ -57,9 +55,18 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
     ));
   }
 
+  void enterFolder(String devicename) {
+    Navigator.push(context, PageRouteBuilder(
+        pageBuilder: (context, anim, secAnim) => MyFilesPage(devicename),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
   void availToFalse () {
     setState(() {
-      deviceAvailable = false;
+      deviceConnected = false;
     });
   }
   /*
