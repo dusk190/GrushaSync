@@ -10,6 +10,8 @@ class DualModeService extends ChangeNotifier {
   // Компоненты
   final MdnsService _mdns = MdnsService();
   HttpServer? _httpServer;
+  String? _currentIp;
+  String? _myDeviceName;
 
   // Состояние
   bool _isServerRunning = false;
@@ -119,6 +121,9 @@ class DualModeService extends ChangeNotifier {
     try {
       _httpServer = await HttpServer.bind(InternetAddress.anyIPv4, 8080);
       _isServerRunning = true;
+
+      _currentIp = await _getLocalIp();
+      _myDeviceName = await _getDeviceName();
 
       // Регистрируем mDNS сервис
       final deviceName = await _getDeviceName();
@@ -244,9 +249,6 @@ class DualModeService extends ChangeNotifier {
     }
   }
 
-
-
-
   // Добавление файлов для шаринга
   void addSharedFiles(List<String> paths) async {
     // Проверяем разрешения перед копированием
@@ -330,9 +332,18 @@ class DualModeService extends ChangeNotifier {
   void _updatePeersFromMdns() {
     final currentPeerIds = _peers.map((p) => p.id).toSet();
     final newPeerIds = _mdns.services.map((s) => s.name).toSet();
-
+    _peers.clear();
     // Добавляем новых пиров
     for (var service in _mdns.services) {
+      final serviceIp = service.host ?? "";
+      final serviceName = service.name ?? "";
+
+      if (_myDeviceName != null && serviceName == _myDeviceName){
+        if (kDebugMode){
+          print("Пропускаем по имени: ${service.name} ($serviceIp)");
+        }
+        continue;
+      }
       if (!currentPeerIds.contains(service.name)) {
         _peers.add(PeerDevice(
           id: service.name ?? 'unknown',
@@ -352,6 +363,7 @@ class DualModeService extends ChangeNotifier {
     if (kDebugMode) {
       print('Обновлён список пиров: ${_peers.length} устройств');
     }
+
   }
 
   // Получение списка файлов с пира
@@ -465,12 +477,27 @@ class DualModeService extends ChangeNotifier {
 
   // Вспомогательные методы
   Future<String?> _getLocalIp() async {
-    final info = NetworkInfo();
     try {
-      return await info.getWifiIP();
+      // Получаем список всех сетевых интерфейсов, исключая loopback (127.0.0.1)
+      final interfaces = await NetworkInterface.list(
+        includeLoopback: false,
+        includeLinkLocal: false,
+      );
+
+      for (var interface in interfaces) {
+        for (var addr in interface.addresses) {
+          // Ищем первый попавшийся IPv4 адрес, который не является внутренним
+          if (addr.type == InternetAddressType.IPv4 &&
+              addr.address != '127.0.0.1') {
+            print('Найден IP через NetworkInterface: ${addr.address}');
+            return addr.address;
+          }
+        }
+      }
     } catch (e) {
-      return null;
+      print('Ошибка NetworkInterface: $e');
     }
+    return null;
   }
 
   Future<String> _getDeviceName() async {
