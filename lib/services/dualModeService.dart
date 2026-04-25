@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:network_info_plus/network_info_plus.dart';
 import 'mdnsService.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class DualModeService extends ChangeNotifier {
@@ -37,19 +38,6 @@ class DualModeService extends ChangeNotifier {
     return true;
   }
 
-  // Запрос нескольких разрешений
-  Future<bool> requestPermissions() async {
-    if (Platform.isAndroid) {
-      final statuses = await [
-        Permission.storage,
-        Permission.manageExternalStorage,
-      ].request();
-
-      return statuses[Permission.storage]?.isGranted ?? false;
-    }
-    return true;
-  }
-
   // Проверка статуса разрешения
   Future<PermissionStatus> checkStoragePermission() async {
     return await Permission.storage.status;
@@ -62,36 +50,62 @@ class DualModeService extends ChangeNotifier {
   // Проверка и запрос всех необходимых разрешений при старте
   Future<bool> ensurePermissions() async {
     if (Platform.isAndroid) {
-      final status = await Permission.storage.status;
+      // Получаем версию Android
+      final deviceInfo = await DeviceInfoPlugin().androidInfo;
+      final sdkInt = deviceInfo.version.sdkInt;
 
-      if (status.isGranted) {
-        if (kDebugMode) {
-          print('Разрешение на storage уже получено');
-        }
-        return true;
-      }
+      if (sdkInt >= 33) {
+        // Андроид 13+
+        final images = await Permission.photos.request();
+        final videos = await Permission.videos.request();
+        final audio = await Permission.audio.request();
 
-      if (status.isDenied) {
-        final result = await requestStoragePermission();
-        if (result) {
-          if (kDebugMode) {
-            print('Разрешение на storage получено');
-          }
+        final allGranted = images.isGranted && videos.isGranted && audio.isGranted;
+
+        if (allGranted) {
+          if (kDebugMode) print('Разрешения для медиа получены андроид 13+');
           return true;
+        } else {
+          // Если какое-то разрешение отклонено навсегда
+          if (images.isPermanentlyDenied || videos.isPermanentlyDenied || audio.isPermanentlyDenied) {
+            if (kDebugMode) print('Разрешения отклонены навсегда');
+            await openAppSettings();
+          }
+          return false;
         }
-      }
 
-      if (status.isPermanentlyDenied) {
-        if (kDebugMode) {
-          print('Разрешение отклонено навсегда, открываем настройки');
+      } else if (sdkInt >= 30) {
+        // Андроид 11-12
+        final status = await Permission.manageExternalStorage.request();
+
+        if (status.isGranted) {
+          if (kDebugMode) print('Разрешение manageExternalStorage получено (Android 11-12)');
+          return true;
+        } else if (status.isPermanentlyDenied) {
+          if (kDebugMode) print('Разрешение отклонено навсегда, открываем настройки');
+          await openAppSettings();
+          return false;
         }
-        await openAppSettings();
+        return false;
+
+      } else {
+        // андроид 10
+        final status = await Permission.storage.request();
+
+        if (status.isGranted) {
+          if (kDebugMode) print('Разрешение storage получено (Android 10-)');
+          return true;
+        } else if (status.isPermanentlyDenied) {
+          if (kDebugMode) print('Разрешение отклонено навсегда, открываем настройки');
+          await openAppSettings();
+          return false;
+        }
         return false;
       }
     }
     return true;
   }
-  // Инициализация (запускаем сразу и сервер, и клиент)
+  // Инициализация
   Future<void> initialize() async {
     final hasPermission = await ensurePermissions();
     if (!hasPermission) {
@@ -356,11 +370,11 @@ class DualModeService extends ChangeNotifier {
           if (kDebugMode) print('Не удалось разрешить $serviceHost, пропускаем');
           continue;
         }
-      } else if (_isValidIp(serviceHost)) {
-        resolvedIp = serviceHost;
-      } else {
-        if (kDebugMode) print('Неизвестный формат хоста: $serviceHost, пропускаем');
+      } else if (serviceHost.contains(':') || serviceHost.contains('%')) {
+        if (kDebugMode) print('Пропускаем IPv6 адрес: $serviceHost');
         continue;
+      } else {
+        resolvedIp = serviceHost;
       }
 
       if (kDebugMode) print('Добавляем устройство: $serviceName → $resolvedIp:${service.port}');
@@ -386,36 +400,33 @@ class DualModeService extends ChangeNotifier {
 
   Future<String?> _resolveLocalHostname(String hostname) async {
     try {
-      // Убираем .local для чистоты
       final cleanHostname = hostname.replaceAll('.local', '');
-
-      // Пробуем получить IP через стандартный DNS/mDNS
       final addresses = await InternetAddress.lookup(cleanHostname);
 
       for (var addr in addresses) {
         if (addr.type == InternetAddressType.IPv4) {
-          if (kDebugMode) print('   Разрешено: $hostname → ${addr.address}');
+          if (kDebugMode) print('Разрешено (IPv4): ${addr.address}');
           return addr.address;
         }
       }
+      if (kDebugMode) print('IPv4 не найден для $hostname, пропускаем');
+      return null;
 
-      if (addresses.isNotEmpty) {
-        return addresses.first.address;
-      }
     } catch (e) {
-      if (kDebugMode) print('   Ошибка разрешения $hostname: $e');
+      if (kDebugMode) print('Ошибка разрешения $hostname: $e');
+      return null;
     }
-
-    return null;
   }
 
-  bool _isValidIp(String host) {
-    final ipRegex = RegExp(r'^(\d{1,3}\.){3}\d{1,3}$');
-    return ipRegex.hasMatch(host);
+  bool _isIpv4(String ip) {
+
+    if (ip.contains(':') || ip.contains('%')) return false;
+    return RegExp(r'^(\d{1,3}\.){3}\d{1,3}$').hasMatch(ip);
   }
   // Получение списка файлов с пира
   Future<List<PeerFile>> fetchPeerFiles(PeerDevice peer) async {
     try {
+      final hostPort = _formatHostForUrl(peer.host, peer.port);
       final url = Uri.http('${peer.host}:${peer.port}', '/api/files');
       final response = await http.get(url);
 
@@ -456,6 +467,7 @@ class DualModeService extends ChangeNotifier {
     }
 
     try {
+      final hostPort = _formatHostForUrl(peer.host, peer.port);
       final url = Uri.http('${peer.host}:${peer.port}', '/download/${file.name}');
       final request = http.Request('GET', url);
       final response = await request.send();
@@ -551,7 +563,13 @@ class DualModeService extends ChangeNotifier {
     final ip = await _getLocalIp();
     return 'Device-${ip?.split('.').last ?? 'unknown'}';
   }
+  String _formatHostForUrl(String host, int port) {
 
+    if (host.contains(':') && !host.contains('.')) {
+      return '[$host]:$port';
+    }
+    return '$host:$port';
+  }
   String _formatSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
