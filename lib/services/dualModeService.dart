@@ -66,7 +66,7 @@ class DualModeService extends ChangeNotifier {
 
       if (status.isGranted) {
         if (kDebugMode) {
-          print('✅ Разрешение на storage уже получено');
+          print('Разрешение на storage уже получено');
         }
         return true;
       }
@@ -75,7 +75,7 @@ class DualModeService extends ChangeNotifier {
         final result = await requestStoragePermission();
         if (result) {
           if (kDebugMode) {
-            print('✅ Разрешение на storage получено');
+            print('Разрешение на storage получено');
           }
           return true;
         }
@@ -83,7 +83,7 @@ class DualModeService extends ChangeNotifier {
 
       if (status.isPermanentlyDenied) {
         if (kDebugMode) {
-          print('⚠️ Разрешение отклонено навсегда, открываем настройки');
+          print('Разрешение отклонено навсегда, открываем настройки');
         }
         await openAppSettings();
         return false;
@@ -324,48 +324,95 @@ class DualModeService extends ChangeNotifier {
   }
 
   // Обработка изменений mDNS
-  void _onMdnsChanged() {
-    _updatePeersFromMdns();
+  Future<void> _onMdnsChanged() async {
+    await _updatePeersFromMdns();
   }
 
   // Обновление списка пиров
-  void _updatePeersFromMdns() {
+  Future<void> _updatePeersFromMdns() async {
     final currentPeerIds = _peers.map((p) => p.id).toSet();
     final newPeerIds = _mdns.services.map((s) => s.name).toSet();
-    _peers.clear();
-    // Добавляем новых пиров
-    for (var service in _mdns.services) {
-      final serviceIp = service.host ?? "";
-      final serviceName = service.name ?? "";
 
-      if (_myDeviceName != null && serviceName == _myDeviceName){
-        if (kDebugMode){
-          print("Пропускаем по имени: ${service.name} ($serviceIp)");
-        }
+    _peers.clear();
+
+    for (var service in _mdns.services) {
+      final serviceName = service.name ?? '';
+      final serviceHost = service.host ?? '';
+
+      // Пропускаем своё устройство
+      if (_myDeviceName != null && serviceName == _myDeviceName) {
+        if (kDebugMode) print('Пропускаем своё устройство: $serviceName');
         continue;
       }
-      if (!currentPeerIds.contains(service.name)) {
-        _peers.add(PeerDevice(
-          id: service.name ?? 'unknown',
-          name: service.name ?? 'Unknown',
-          host: service.host ?? '0.0.0.0',
-          port: service.port ?? 8080,
-          lastSeen: DateTime.now(),
-        ));
-      }
-    }
 
-    // Удаляем потерянных пиров
-    _peers.removeWhere((p) => !newPeerIds.contains(p.id));
+      // Преобразуем .local имя в IP
+      String? resolvedIp;
+
+      if (serviceHost.endsWith('.local')) {
+        if (kDebugMode) print('Разрешаем имя: $serviceHost');
+        resolvedIp = await _resolveLocalHostname(serviceHost);
+
+        if (resolvedIp == null) {
+          if (kDebugMode) print('Не удалось разрешить $serviceHost, пропускаем');
+          continue;
+        }
+      } else if (_isValidIp(serviceHost)) {
+        resolvedIp = serviceHost;
+      } else {
+        if (kDebugMode) print('Неизвестный формат хоста: $serviceHost, пропускаем');
+        continue;
+      }
+
+      if (kDebugMode) print('Добавляем устройство: $serviceName → $resolvedIp:${service.port}');
+
+      _peers.add(PeerDevice(
+        id: service.name ?? 'unknown',
+        name: service.name ?? 'Unknown',
+        host: resolvedIp,
+        port: service.port ?? 8080,
+        lastSeen: DateTime.now(),
+      ));
+    }
 
     notifyListeners();
 
     if (kDebugMode) {
       print('Обновлён список пиров: ${_peers.length} устройств');
+      for (var p in _peers) {
+        print('   - ${p.name} (${p.host}:${p.port})');
+      }
     }
-
   }
 
+  Future<String?> _resolveLocalHostname(String hostname) async {
+    try {
+      // Убираем .local для чистоты
+      final cleanHostname = hostname.replaceAll('.local', '');
+
+      // Пробуем получить IP через стандартный DNS/mDNS
+      final addresses = await InternetAddress.lookup(cleanHostname);
+
+      for (var addr in addresses) {
+        if (addr.type == InternetAddressType.IPv4) {
+          if (kDebugMode) print('   Разрешено: $hostname → ${addr.address}');
+          return addr.address;
+        }
+      }
+
+      if (addresses.isNotEmpty) {
+        return addresses.first.address;
+      }
+    } catch (e) {
+      if (kDebugMode) print('   Ошибка разрешения $hostname: $e');
+    }
+
+    return null;
+  }
+
+  bool _isValidIp(String host) {
+    final ipRegex = RegExp(r'^(\d{1,3}\.){3}\d{1,3}$');
+    return ipRegex.hasMatch(host);
+  }
   // Получение списка файлов с пира
   Future<List<PeerFile>> fetchPeerFiles(PeerDevice peer) async {
     try {
