@@ -20,8 +20,10 @@ class DualModeService extends ChangeNotifier {
   final List<PeerDevice> _peers = [];
   final List<SharedFile> _mySharedFiles = [];
   final List<PeerFile> _peerFiles = [];
+  int _updateCounter = 0;
 
   // Геттеры
+  int get updateCounter => _updateCounter;
   bool get isServerRunning => _isServerRunning;
   bool get isClientMode => _isClientMode;
   List<PeerDevice> get peers => _peers;
@@ -179,6 +181,27 @@ class DualModeService extends ChangeNotifier {
       if (request.uri.path.startsWith('/download/')) {
         final filename = request.uri.pathSegments.last;
         await _handleDownloadRequest(request, filename);
+        return;
+      }
+
+      // POST /api/notify - уведомление об обновлении файлов
+      if (request.uri.path == '/api/notify' && request.method == 'POST') {
+        final body = await utf8.decoder.bind(request).join();
+        final data = jsonDecode(body);
+        final senderName = data['deviceName'] ?? 'Unknown';
+
+        if (kDebugMode) {
+          print('Получено уведомление об обновлении от $senderName');
+        }
+
+        // Уведомляем UI (вызовет обновление у всех слушателей)
+        _updateCounter++;
+        notifyListeners();
+
+        request.response
+          ..statusCode = 200
+          ..write('OK')
+          ..close();
         return;
       }
 
@@ -371,6 +394,13 @@ class DualModeService extends ChangeNotifier {
 
     notifyListeners();
 
+    // Оповещаем всех пиров об обновлении
+    _notifyPeersAboutUpdate();
+
+    if (kDebugMode) {
+      print('Файлы добавлены, уведомления отправлены');
+    }
+
     if (kDebugMode) {
       print('Всего общих файлов: ${_mySharedFiles.length}');
       for (var f in _mySharedFiles) {
@@ -387,6 +417,41 @@ class DualModeService extends ChangeNotifier {
   Future<void> _onMdnsChanged() async {
     await _updatePeersFromMdns();
   }
+
+  // Уведомление всех пиров о добавлении новых файлов
+  Future<void> _notifyPeersAboutUpdate() async {
+    // Пропускаем, если мы не в режиме сервера или нет пиров
+    if (!_isServerRunning || _peers.isEmpty) return;
+
+    final myName = _myDeviceName ?? 'Unknown';
+    final notificationData = jsonEncode({
+      'deviceName': myName,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+
+    // Отправляем уведомление каждому пиру
+    for (var peer in _peers) {
+      try {
+        final url = Uri.parse('http://${peer.host}:${peer.port}/api/notify');
+        final response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: notificationData,
+        ).timeout(const Duration(seconds: 5));
+
+        if (response.statusCode == 200) {
+          if (kDebugMode) {
+            print('Уведомление отправлено на ${peer.name}');
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('Не удалось уведомить ${peer.name}: $e');
+        }
+      }
+    }
+  }
+
 
   // Обновление списка пиров
   Future<void> _updatePeersFromMdns() async {

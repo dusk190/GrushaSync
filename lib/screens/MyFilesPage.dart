@@ -41,48 +41,52 @@ class MyFilesPageState extends State<MyFilesPage> {
               ),)
         ),
 
-        body: FutureBuilder<List<PeerFile>>(
-          future: service.fetchPeerFiles(widget.peer),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return Center(child: Text('Ошибка: ${snapshot.error}'));
-            }
+        body: Consumer<DualModeService>(builder: (context, service, _) { return
+          FutureBuilder<List<PeerFile>>(
+            key: ValueKey('${widget.peer.id}_${service.updateCounter}'),
+            future: service.fetchPeerFiles(widget.peer),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Ошибка: ${snapshot.error}'));
+              }
 
-            final files = snapshot.data ?? [];
-            if (files.isEmpty) {
-              return const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.folder_open, size: 64, color: Colors.grey),
-                    SizedBox(height: 16),
-                    Text('Нет доступных файлов'),
-                    Text('Нажмите + чтобы добавить свои файлы',
-                        style: TextStyle(fontSize: 12)),
-                  ],
-                ),
-              );
-            }
-
-            return ListView.builder(
-              padding: const EdgeInsets.all(14),
-              itemCount: files.length,
-              itemBuilder: (context, index) {
-                final file = files[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: MyFile(
-                    file: file,
-                    peer: widget.peer,
+              final files = snapshot.data ?? [];
+              if (files.isEmpty) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.folder_open, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text('Нет доступных файлов'),
+                      Text('Нажмите + чтобы добавить свои файлы',
+                          style: TextStyle(fontSize: 12)),
+                    ],
                   ),
                 );
-              },
-            );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(14),
+                itemCount: files.length,
+                itemBuilder: (context, index) {
+                  final file = files[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: MyFile(
+                      file: file,
+                      peer: widget.peer,
+                    ),
+                  );
+                },
+              );
+            },
+          );
           },
-        ),
+      ),
 
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
