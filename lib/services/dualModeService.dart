@@ -266,20 +266,72 @@ class DualModeService extends ChangeNotifier {
   // Добавление файлов для шаринга
   void addSharedFiles(List<String> paths) async {
     // Проверяем разрешения перед копированием
-    final hasPermission = await requestStoragePermission();
-    if (!hasPermission) {
-      if (kDebugMode) {
-        print('Нет разрешения на запись в хранилище');
-      }
-      return;
-    }
+  //   final hasPermission = await requestStoragePermission();
+  //   if (!hasPermission) {
+  //     if (kDebugMode) {
+  //       print('Нет разрешения на запись в хранилище');
+  //     }
+  //     return;
+  //   }
+  //
+  //   final sharedDir = Directory('/storage/emulated/0/Download/GrushaSync');
+  //
+  //   if (!await sharedDir.exists()) {
+  //     await sharedDir.create(recursive: true);
+  //   }
+  //
+  //   for (var path in paths) {
+  //     try {
+  //       final sourceFile = File(path);
+  //       if (!await sourceFile.exists()) {
+  //         if (kDebugMode) {
+  //           print('Файл не существует: $path');
+  //         }
+  //         continue;
+  //       }
+  //
+  //       // Извлекаем имя файла
+  //       String fileName = path;
+  //       if (path.contains('/')) {
+  //         fileName = path.split('/').last;
+  //       } else if (path.contains('\\')) {
+  //         fileName = path.split('\\').last;
+  //       }
+  //
+  //       final destPath = '${sharedDir.path}/$fileName';
+  //       final destFile = File(destPath);
+  //
+  //       // Копируем, если файл ещё не существует
+  //       if (!await destFile.exists()) {
+  //         await sourceFile.copy(destPath);
+  //         if (kDebugMode) {
+  //           print('Файл скопирован: $fileName');
+  //         }
+  //       }
+  //
+  //       // Проверяем, нет ли уже такого файла в списке
+  //       if (!_mySharedFiles.any((f) => f.name == fileName)) {
+  //         _mySharedFiles.add(SharedFile(
+  //           name: fileName,
+  //           path: destPath,
+  //           size: await destFile.length(),
+  //         ));
+  //       }
+  //     } catch (e) {
+  //       if (kDebugMode) {
+  //         print('Ошибка обработки файла $path: $e');
+  //       }
+  //     }
+  //   }
+  //
+  //   notifyListeners();
+  //
+  //   if (kDebugMode) {
+  //     print('Всего общих файлов: ${_mySharedFiles.length}');
+  //   }
+  // }
 
-    final sharedDir = Directory('/storage/emulated/0/Download/GrushaSync');
-
-    if (!await sharedDir.exists()) {
-      await sharedDir.create(recursive: true);
-    }
-
+  //  Удаление файла из шаринга
     for (var path in paths) {
       try {
         final sourceFile = File(path);
@@ -290,7 +342,7 @@ class DualModeService extends ChangeNotifier {
           continue;
         }
 
-        // Извлекаем имя файла
+
         String fileName = path;
         if (path.contains('/')) {
           fileName = path.split('/').last;
@@ -298,24 +350,17 @@ class DualModeService extends ChangeNotifier {
           fileName = path.split('\\').last;
         }
 
-        final destPath = '${sharedDir.path}/$fileName';
-        final destFile = File(destPath);
 
-        // Копируем, если файл ещё не существует
-        if (!await destFile.exists()) {
-          await sourceFile.copy(destPath);
-          if (kDebugMode) {
-            print('Файл скопирован: $fileName');
-          }
-        }
-
-        // Проверяем, нет ли уже такого файла в списке
         if (!_mySharedFiles.any((f) => f.name == fileName)) {
           _mySharedFiles.add(SharedFile(
             name: fileName,
-            path: destPath,
-            size: await destFile.length(),
+            path: path,  // оригинальный путь
+            size: await sourceFile.length(),
           ));
+
+          if (kDebugMode) {
+            print('Файл добавлен в общий доступ: $fileName');
+          }
         }
       } catch (e) {
         if (kDebugMode) {
@@ -328,10 +373,11 @@ class DualModeService extends ChangeNotifier {
 
     if (kDebugMode) {
       print('Всего общих файлов: ${_mySharedFiles.length}');
+      for (var f in _mySharedFiles) {
+        print('   - ${f.name} (${f.path})');
+      }
     }
   }
-
-  //  Удаление файла из шаринга
   void removeSharedFile(String name) {
     _mySharedFiles.removeWhere((f) => f.name == name);
     notifyListeners();
@@ -428,6 +474,7 @@ class DualModeService extends ChangeNotifier {
     try {
       final hostPort = _formatHostForUrl(peer.host, peer.port);
       final url = Uri.http('${peer.host}:${peer.port}', '/api/files');
+      print('Запрос к ${peer.host}:${peer.port}/api/files');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -457,35 +504,61 @@ class DualModeService extends ChangeNotifier {
 
   // Скачивание файла с пира
   Future<bool> downloadFile(PeerDevice peer, PeerFile file, Function(double) onProgress) async {
-    //  Проверяем разрешения перед скачиванием
-    final hasPermission = await requestStoragePermission();
-    if (!hasPermission) {
-      if (kDebugMode) {
-        print('Нет разрешения на запись в хранилище');
-      }
-      return false;
-    }
-
     try {
       final hostPort = _formatHostForUrl(peer.host, peer.port);
-      final url = Uri.http('${peer.host}:${peer.port}', '/download/${file.name}');
+      final url = Uri.http(hostPort, '/download/${file.name}');
       final request = http.Request('GET', url);
       final response = await request.send();
 
       if (response.statusCode != 200) {
+        print('Ошибка HTTP: ${response.statusCode}');
         return false;
       }
 
-      // Получаем правильную папку для скачиваний
+      // Получаем папку для скачиваний
       final downloadDir = await _getDownloadDirectory();
+      print('Папка для сохранения: ${downloadDir.path}');
 
+      // Проверяем доступность папки
       if (!await downloadDir.exists()) {
-        await downloadDir.create(recursive: true);
+        try {
+          await downloadDir.create(recursive: true);
+          print('Папка создана: ${downloadDir.path}');
+        } catch (e) {
+          print('Не удалось создать папку: $e');
+          return false;
+        }
+      }
+
+      // Проверяем, можно ли писать в папку
+      final testFile = File('${downloadDir.path}/.test');
+      try {
+        await testFile.writeAsString('test');
+        await testFile.delete();
+        print('Папка доступна для записи');
+      } catch (e) {
+        print('Нет прав на запись в папку: $e');
+        return false;
       }
 
       final filePath = '${downloadDir.path}/${file.name}';
       final outputFile = File(filePath);
-      final sink = outputFile.openWrite();
+
+      // Если файл уже существует, добавляем суффикс
+      String finalPath = filePath;
+      int counter = 1;
+      while (await File(finalPath).exists()) {
+        final extension = file.name.contains('.')
+            ? '.${file.name.split('.').last}'
+            : '';
+        final nameWithoutExt = file.name.split('.').first;
+        finalPath = '${downloadDir.path}/${nameWithoutExt}_$counter$extension';
+        counter++;
+      }
+
+      print('Сохраняем в: $finalPath');
+      final outputFileFinal = File(finalPath);
+      final sink = outputFileFinal.openWrite();
 
       int bytesReceived = 0;
       final contentLength = response.contentLength ?? file.size;
@@ -498,15 +571,17 @@ class DualModeService extends ChangeNotifier {
 
       await sink.close();
 
-      if (kDebugMode) {
-        print('Скачан файл: ${file.name} в ${downloadDir.path}');
+      // Проверяем, что файл действительно создался
+      if (await outputFileFinal.exists()) {
+        final fileSize = await outputFileFinal.length();
+        print('Скачан файл: ${file.name} (${_formatSize(fileSize)}) в ${downloadDir.path}');
+        return true;
+      } else {
+        print('Файл не был создан после записи');
+        return false;
       }
-
-      return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка скачивания: $e');
-      }
+      print('Ошибка скачивания: $e');
       return false;
     }
   }
@@ -522,7 +597,19 @@ class DualModeService extends ChangeNotifier {
       final home = Platform.environment['HOME'] ?? '/home/default';
       return Directory('$home/Downloads/GrushaSync');
     } else {
-      return Directory('/storage/emulated/0/Download/GrushaSync');
+      final downloadsPath = '/storage/emulated/0/Download';
+      final grushaDir = Directory('$downloadsPath/GrushaSync');
+
+      // Пытаемся создать папку, если не получится — используем просто Download
+      try {
+        if (!await grushaDir.exists()) {
+          await grushaDir.create(recursive: true);
+        }
+        return grushaDir;
+      } catch (e) {
+        print('Не удалось создать папку GrushaSync: $e');
+        return Directory(downloadsPath);
+      }
     }
   }
   // Остановка сервиса
