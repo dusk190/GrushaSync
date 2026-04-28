@@ -60,7 +60,10 @@ class DualModeService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString("peer_password_$peerId", password);
   }
-
+  // Публичное сохранение пароля
+  Future<void> savePeerPassword(String peerId, String password) async {
+    await _savePeerPassword(peerId, password);
+  }
   Future<String?> getPeerPassword(String peerId) async {
     // Сначала проверяем кэш
     if (_peerPasswords.containsKey(peerId)) {
