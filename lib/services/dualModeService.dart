@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:network_info_plus/network_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'mdnsService.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -13,6 +14,7 @@ class DualModeService extends ChangeNotifier {
   HttpServer? _httpServer;
   String? _currentIp;
   String? _myDeviceName;
+  String? _devicePassword;
 
   // Состояние
   bool _isServerRunning = false;
@@ -22,6 +24,7 @@ class DualModeService extends ChangeNotifier {
   final List<PeerFile> _peerFiles = [];
   int _updateCounter = 0;
 
+
   // Геттеры
   int get updateCounter => _updateCounter;
   bool get isServerRunning => _isServerRunning;
@@ -30,6 +33,50 @@ class DualModeService extends ChangeNotifier {
   List<SharedFile> get mySharedFiles => _mySharedFiles;
   List<PeerFile> get peerFiles => _peerFiles;
   MdnsService get mdns => _mdns;
+  String? get devicePassword => _devicePassword;
+  final Map<String, String> _peerPasswords = {};
+
+
+  // Это сеттер для пароля, должно вызываться из фронта
+  void setDevicePassword(String password){
+    _devicePassword = password;
+    _savePasswordToStorage(password);
+    notifyListeners();
+  }
+  // Загрузка пароля при старте
+  Future<void> _loadPasswordFromStorage() async{
+    final prefs = await SharedPreferences.getInstance();
+    _devicePassword = prefs.getString('device_password');
+  }
+  // Сохраненение пароля
+  Future<void> _savePasswordToStorage(String password) async{
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('device_password', password);
+  }
+
+  // Тут сохраняем пароль пира
+  Future<void> _savePeerPassword(String peerId, String password) async{
+    _peerPasswords[peerId] = password;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString("peer_password_$peerId", password);
+  }
+
+  Future<String?> getPeerPassword(String peerId) async {
+    // Сначала проверяем кэш
+    if (_peerPasswords.containsKey(peerId)) {
+      return _peerPasswords[peerId];
+    }
+
+    // Если нет в кэше - грузим из SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final password = prefs.getString('peer_password_$peerId');
+    if (password != null) {
+      _peerPasswords[peerId] = password;
+    }
+    return password;
+  }
+
+
   // Запрос разрешения на storage
   Future<bool> requestStoragePermission() async {
     if (Platform.isAndroid) {
@@ -109,6 +156,7 @@ class DualModeService extends ChangeNotifier {
   }
   // Инициализация
   Future<void> initialize() async {
+    await _loadPasswordFromStorage();
     final hasPermission = await ensurePermissions();
     if (!hasPermission) {
       if (kDebugMode) {
@@ -164,8 +212,19 @@ class DualModeService extends ChangeNotifier {
   // Обработка входящих HTTP запросов
   void _handleIncomingRequests() {
     _httpServer?.listen((HttpRequest request) async {
-      final peerIp = request.connectionInfo?.remoteAddress.address ?? 'unknown';
-
+      final password = request.uri.queryParameters['password'] ?? request.headers.value('X-Password');
+      
+      if (_devicePassword != null && _devicePassword!.isNotEmpty){
+        if (password != _devicePassword){
+          request.response
+              ..statusCode = 401
+              ..headers.add('WWW-Authenticate', 'Password required')
+              ..write("Ошибка авторизации: неправильный пароль")
+              ..close();
+          return;
+        }
+      }
+      
       // GET /api/files - список файлов
       if (request.uri.path == '/api/files') {
         final response = _generateFileListJson();
@@ -288,72 +347,6 @@ class DualModeService extends ChangeNotifier {
 
   // Добавление файлов для шаринга
   void addSharedFiles(List<String> paths) async {
-    // Проверяем разрешения перед копированием
-  //   final hasPermission = await requestStoragePermission();
-  //   if (!hasPermission) {
-  //     if (kDebugMode) {
-  //       print('Нет разрешения на запись в хранилище');
-  //     }
-  //     return;
-  //   }
-  //
-  //   final sharedDir = Directory('/storage/emulated/0/Download/GrushaSync');
-  //
-  //   if (!await sharedDir.exists()) {
-  //     await sharedDir.create(recursive: true);
-  //   }
-  //
-  //   for (var path in paths) {
-  //     try {
-  //       final sourceFile = File(path);
-  //       if (!await sourceFile.exists()) {
-  //         if (kDebugMode) {
-  //           print('Файл не существует: $path');
-  //         }
-  //         continue;
-  //       }
-  //
-  //       // Извлекаем имя файла
-  //       String fileName = path;
-  //       if (path.contains('/')) {
-  //         fileName = path.split('/').last;
-  //       } else if (path.contains('\\')) {
-  //         fileName = path.split('\\').last;
-  //       }
-  //
-  //       final destPath = '${sharedDir.path}/$fileName';
-  //       final destFile = File(destPath);
-  //
-  //       // Копируем, если файл ещё не существует
-  //       if (!await destFile.exists()) {
-  //         await sourceFile.copy(destPath);
-  //         if (kDebugMode) {
-  //           print('Файл скопирован: $fileName');
-  //         }
-  //       }
-  //
-  //       // Проверяем, нет ли уже такого файла в списке
-  //       if (!_mySharedFiles.any((f) => f.name == fileName)) {
-  //         _mySharedFiles.add(SharedFile(
-  //           name: fileName,
-  //           path: destPath,
-  //           size: await destFile.length(),
-  //         ));
-  //       }
-  //     } catch (e) {
-  //       if (kDebugMode) {
-  //         print('Ошибка обработки файла $path: $e');
-  //       }
-  //     }
-  //   }
-  //
-  //   notifyListeners();
-  //
-  //   if (kDebugMode) {
-  //     print('Всего общих файлов: ${_mySharedFiles.length}');
-  //   }
-  // }
-
   //  Удаление файла из шаринга
     for (var path in paths) {
       try {
@@ -529,18 +522,23 @@ class DualModeService extends ChangeNotifier {
     }
   }
 
-  bool _isIpv4(String ip) {
-
-    if (ip.contains(':') || ip.contains('%')) return false;
-    return RegExp(r'^(\d{1,3}\.){3}\d{1,3}$').hasMatch(ip);
-  }
   // Получение списка файлов с пира
-  Future<List<PeerFile>> fetchPeerFiles(PeerDevice peer) async {
+  Future<List<PeerFile>> fetchPeerFiles(PeerDevice peer, {String? password})  async {
     try {
-      final hostPort = _formatHostForUrl(peer.host, peer.port);
-      final url = Uri.http('${peer.host}:${peer.port}', '/api/files');
-      print('Запрос к ${peer.host}:${peer.port}/api/files');
+      // Тут урл с паролем
+      String urlString = "http://${peer.host}:${peer.port}/api/files";
+      if (password != null && password.isNotEmpty){
+        urlString += "?password=$password";
+      }
+
+      final url = Uri.parse(urlString);
+      print('Запрос к ${url}');
       final response = await http.get(url);
+
+      if (response.statusCode == 401){
+        print("Устройство ${peer.name} требует пароль");
+        return [];
+      }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -551,7 +549,9 @@ class DualModeService extends ChangeNotifier {
           peerId: peer.id,
           peerName: peer.name,
         )).toList();
-
+        if (password != null && password.isNotEmpty){
+          await _savePeerPassword(peer.id, password);
+        }
         if (kDebugMode) {
           print('Получено ${files.length} файлов от ${peer.name}');
         }
@@ -568,12 +568,20 @@ class DualModeService extends ChangeNotifier {
   }
 
   // Скачивание файла с пира
-  Future<bool> downloadFile(PeerDevice peer, PeerFile file, Function(double) onProgress) async {
+  Future<bool> downloadFile(PeerDevice peer, PeerFile file, Function(double) onProgress,{String? password}) async {
     try {
-      final hostPort = _formatHostForUrl(peer.host, peer.port);
-      final url = Uri.http(hostPort, '/download/${file.name}');
+      String urlString = "http://${peer.host}:${peer.port}/download/${file.name}";
+      if (password != null && password.isNotEmpty){
+        urlString += "?password=$password";
+      }
+      final url = Uri.parse(urlString);
       final request = http.Request('GET', url);
       final response = await request.send();
+
+      if (response.statusCode == 401){
+        print("Нужен пароль для скачивания");
+        return false;
+      }
 
       if (response.statusCode != 200) {
         print('Ошибка HTTP: ${response.statusCode}');

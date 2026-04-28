@@ -43,6 +43,7 @@ dependencies:
   path_provider: ^2.1.5
   downloadsfolder: ^1.2.0
   device_info_plus: ^10.0.0
+  shared_preferences: ^2.2.2
 
 dependency_overrides:
   nsd_android: 2.2.0
