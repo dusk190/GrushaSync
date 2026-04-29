@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/dualModeService.dart';
 import 'package:untitled3333333/screens/MyHomePage.dart';
-import 'screens/mainScreen.dart';
 
 void main() {
   runApp(
