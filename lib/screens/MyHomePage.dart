@@ -3,6 +3,8 @@ import 'package:untitled3333333/widgets/MyDeviceFolder.dart';
 import 'package:provider/provider.dart';
 import '../services/dualModeService.dart';
 
+// Экран главного меню
+
 class MyHomePage extends StatefulWidget {
   final VoidCallback changeTheme;
   const MyHomePage({super.key, required this.changeTheme});
@@ -28,8 +30,10 @@ class MyHomePageState extends State<MyHomePage> {
     final peers = service.peers;
 
     return Scaffold(
+        // Полоса сверху экрана
         appBar: AppBar(
             actions: [
+              // Кнопка переключения темной/светлой темы
               IconButton(
                 icon: Icon(Theme.of(context).brightness == Brightness.dark ? Icons.light_mode : Icons.dark_mode),
                 onPressed: widget.changeTheme,
@@ -38,6 +42,7 @@ class MyHomePageState extends State<MyHomePage> {
             titleTextStyle: Theme.of(context).textTheme.displayLarge,
             backgroundColor: Theme.of(context).colorScheme.secondary,
             title: Text("GrushaSync"),
+            // Декоративная полоска для разделения appBar и body
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(2),
               child: Container(
@@ -46,6 +51,7 @@ class MyHomePageState extends State<MyHomePage> {
               ),)
         ),
 
+        // Список пиров, билдится как панели-кнопки
         body: ListView.builder(
             padding: const EdgeInsets.all(14),
             itemCount: peers.length,
@@ -56,6 +62,7 @@ class MyHomePageState extends State<MyHomePage> {
                 child: MyDeviceFolder(peer),
               );
             }),
+
         /*
         floatingActionButton: FloatingActionButton(
             onPressed: () async {

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:untitled3333333/screens/MyFilesPage.dart';
 import 'package:untitled3333333/services/dualModeService.dart';
 
+// Виджет: папка-устройство (пир)
+
 class MyDeviceFolder extends StatefulWidget {
   final PeerDevice peer;
 
@@ -16,7 +18,7 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
 
   @override
   Widget build(BuildContext context) {
-    // hi
+    // Кнопка-папка
     return Center(child: ElevatedButton(
       style: ElevatedButton.styleFrom(
         fixedSize: const Size(380, 70),
@@ -29,7 +31,9 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
         ),
         elevation: 0,
       ),
+      // При нажатии переход в папку (на экран MyFilesPage)
       onPressed: () => enterFolder(widget.peer),
+      // Содержание кнопки
       child:
       Row(
         children: [
@@ -38,6 +42,7 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // Фиктивное имя устройства-пира
                 Text(
                   widget.peer.name,
                   style: Theme.of(context).textTheme.bodyMedium,
@@ -45,6 +50,7 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
+                // Ip-адрес и порт пира
                 Text(
                   '${widget.peer.host}:${widget.peer.port}',
                   style: Theme.of(context).textTheme.bodySmall,
@@ -54,6 +60,9 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
             ),
           ),
           const SizedBox(width: 16),
+          // Индикатор доступности пира, на данный момент чисто как декорация,
+          // ибо отслеживать одно устроство как будто у него постоянный адрес
+          // наше приложение, насколько понимаю, не умеет
           Container(
             width: 25,
             height: 25,
@@ -68,6 +77,7 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
     );
   }
 
+  // Навигация: переход на экран MyFilesPage для данного устройства (пира)
   void enterFolder(PeerDevice peer) {
     Navigator.push(context, PageRouteBuilder(
         pageBuilder: (context, anim, secAnim) => MyFilesPage(peer),
@@ -76,6 +86,7 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
       ),
     );
   }
+
 /*
   void availToFalse () {
     setState(() {

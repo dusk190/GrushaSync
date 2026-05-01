@@ -8,6 +8,7 @@ import 'package:untitled3333333/screens/MyHomePage.dart';
 
 void main() {
   runApp(
+    // Че этот провайдер делает, вопрос к беку
     ChangeNotifierProvider(
       create: (_) => DualModeService(),
       child: const MyApp(),
@@ -22,10 +23,12 @@ class MyApp extends StatefulWidget {
 }
 
 class MyAppState extends State<MyApp> {
+  // Смотрим на то, светлая или темная тема по умолчанию выбрана в ОС устройства
   ThemeMode myThemeMode = ThemeMode.system;
   @override
   Widget build(BuildContext context) {
 
+    // Темы для текстов
     const myTextTheme = TextTheme(
       displayLarge: TextStyle(fontSize: 24),
       bodyMedium: TextStyle(fontSize: 24),
@@ -33,8 +36,8 @@ class MyAppState extends State<MyApp> {
     );
 
     return MaterialApp(
-
         themeMode: myThemeMode,
+        // Светлая тема
         theme: ThemeData(
           brightness: Brightness.light,
           textTheme: myTextTheme,
@@ -45,6 +48,7 @@ class MyAppState extends State<MyApp> {
           ),
         ),
 
+        // Темная тема
         darkTheme: ThemeData(
           brightness: Brightness.dark,
           textTheme: myTextTheme,
@@ -62,12 +66,12 @@ class MyAppState extends State<MyApp> {
         ),
 
         debugShowCheckedModeBanner: false,
+        // Экран главного меню MyHomePage
         home: MyHomePage(changeTheme: changeTheme)
-        //home: MainScreen(),
-
     );
   }
 
+  // Функция переключения темы, которую мы передаем в экран главного меню
   void changeTheme() {
     setState(() {
       myThemeMode = myThemeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;

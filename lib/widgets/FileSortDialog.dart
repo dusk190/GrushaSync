@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+// Диалог выбора режима сортировки файлов
+// Пока не используется, доработка отсутствует в ближайших планах
+
 class FileSortDialog extends StatefulWidget {
   const FileSortDialog({super.key});
 

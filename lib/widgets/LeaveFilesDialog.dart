@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+// Диалог, который вызывался при попытке выйти из окна выбора файлов к отправке,
+// (не file_picker) ибо они не отправлялись из кнопки и сбрасывались при выходе
+// Рудимент, не используется и скорее всего не будет
+
 class LeaveFilesDialog extends StatefulWidget {
   const LeaveFilesDialog({super.key});
 

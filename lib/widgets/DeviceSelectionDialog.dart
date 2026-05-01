@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+// Диалог выбора пира для добавления в список пиров
+// Пока не используется
+
 class DeviceSelectionDialog extends StatelessWidget {
   final List<String> availableDevices;
 

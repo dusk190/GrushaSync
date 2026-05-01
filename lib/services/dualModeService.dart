@@ -345,6 +345,8 @@ class DualModeService extends ChangeNotifier {
   void removeSharedFile(String name) {
     _mySharedFiles.removeWhere((f) => f.name == name);
     notifyListeners();
+    // Оповещаем всех пиров об обновлении
+    _notifyPeersAboutUpdate();
   }
 
   // Обработка изменений mDNS
