@@ -646,6 +646,7 @@ class DualModeService extends ChangeNotifier {
     final ip = await _getLocalIp();
     return 'Device-${ip?.split('.').last ?? 'unknown'}';
   }
+
   String _formatHostForUrl(String host, int port) {
 
     if (host.contains(':') && !host.contains('.')) {
@@ -657,6 +658,15 @@ class DualModeService extends ChangeNotifier {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  Future<String> getCachedDeviceName() async {
+    if (_myDeviceName != null) {
+      return _myDeviceName!;
+    }
+    final name = await _getDeviceName();
+    _myDeviceName = name;
+    return name;
   }
 }
 

@@ -14,14 +14,17 @@ class MyHomePage extends StatefulWidget {
 }
 
 class MyHomePageState extends State<MyHomePage> {
+  late Future<String> _deviceName;
   @override
   void initState() {
     super.initState();
-    // Инициализация сервиса при старте экрана
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final service = Provider.of<DualModeService>(context, listen: false);
-      service.initialize();
-    });
+    _deviceName = _initAndGetName();
+  }
+
+  Future<String> _initAndGetName() async {
+    final service = Provider.of<DualModeService>(context, listen: false);
+    await service.initialize();
+    return await service.getCachedDeviceName();
   }
 
   @override
@@ -41,7 +44,15 @@ class MyHomePageState extends State<MyHomePage> {
             ],
             titleTextStyle: Theme.of(context).textTheme.displayLarge,
             backgroundColor: Theme.of(context).colorScheme.secondary,
-            title: Text("GrushaSync"),
+            title: FutureBuilder<String>(
+                future: _deviceName,
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    return Text("GrushaSync (${snapshot.data})");
+                  }
+                  return const Text("GrushaSync (загрузка...)");
+                },
+            ),
             // Декоративная полоска для разделения appBar и body
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(2),

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:untitled3333333/services/dualModeService.dart';
 
-// Виджет: файл, полученный от пира, который можно скачать
+// Виджет: полученный от пира файл, который можно скачать
 
 class MyFile extends StatefulWidget {
   final PeerFile file;

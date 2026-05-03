@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:untitled3333333/services/dualModeService.dart';
 
-// Виджет: файл текущего устройства, который пользователь расшарил
+// Виджет: файл с текущего устройства, который пользователь расшарил другому устройству
 
 class MySentFile extends StatefulWidget {
   final SharedFile file;
