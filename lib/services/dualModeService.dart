@@ -393,10 +393,10 @@ class DualModeService extends ChangeNotifier {
   Future<void> _updatePeersFromMdns() async {
     final currentPeerIds = _peers.map((p) => p.id).toSet();
     final newPeerIds = _mdns.services.map((s) => s.name).toSet();
+    final servicesCopy = _mdns.services.toList();
 
-    _peers.clear();
 
-    for (var service in _mdns.services) {
+    for (var service in servicesCopy) {
       final serviceName = service.name ?? '';
       final serviceHost = service.host ?? '';
 
