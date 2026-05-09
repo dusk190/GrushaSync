@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/dualModeService.dart';
 import 'package:untitled3333333/screens/MyHomePage.dart';
+import '../services/ConfigService.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await ConfigService.init();
   runApp(
     // Че этот провайдер делает, вопрос к беку
     ChangeNotifierProvider(
@@ -27,6 +30,10 @@ class MyAppState extends State<MyApp> {
   ThemeMode myThemeMode = ThemeMode.system;
   @override
   Widget build(BuildContext context) {
+    // Если юзер менял тему, смотрим в конфиг
+    if (ConfigService.isDarkMode != null) {
+      myThemeMode = ConfigService.isDarkMode! ? ThemeMode.dark : ThemeMode.light;;
+    }
 
     // Темы для текстов
     const myTextTheme = TextTheme(
@@ -74,7 +81,15 @@ class MyAppState extends State<MyApp> {
   // Функция переключения темы, которую мы передаем в экран главного меню
   void changeTheme() {
     setState(() {
-      myThemeMode = myThemeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+      if (myThemeMode == ThemeMode.dark) {
+        myThemeMode = ThemeMode.light;
+        ConfigService.isDarkMode = false;
+      }
+      else {
+        myThemeMode = ThemeMode.dark;
+        ConfigService.isDarkMode = true;
+      }
+      //myThemeMode = myThemeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     });
   }
 }
