@@ -44,6 +44,7 @@ dependencies:
   downloadsfolder: ^1.2.0
   device_info_plus: ^10.0.0
   shared_preferences: ^2.2.2
+  flutter_launcher_icons: "^0.14.3"
 
 dependency_overrides:
   nsd_android: 2.2.0
@@ -101,3 +102,14 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+flutter_launcher_icons:
+  android: true
+  ios: true
+  windows:
+    generate: true
+  macos:
+    generate: true
+  linux:
+    generate: true
+  image_path: "assets/icons/grush_icon_v4.png"
+  adaptive_icon_foreground: "assets/icons/grush_icon_v4.png"
