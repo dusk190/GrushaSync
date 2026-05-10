@@ -111,5 +111,5 @@ flutter_launcher_icons:
     generate: true
   linux:
     generate: true
-  image_path: "assets/icons/grush_icon_v4.png"
-  adaptive_icon_foreground: "assets/icons/grush_icon_v4.png"
+  image_path: "assets/icons/grush_icon_v8.png"
+  adaptive_icon_foreground: "assets/icons/grush_icon_v8.png"
