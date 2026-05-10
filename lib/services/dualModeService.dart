@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:network_info_plus/network_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'mdnsService.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:nsd/nsd.dart' as nsd;
 
 class DualModeService extends ChangeNotifier {
   // Компоненты
@@ -13,6 +15,7 @@ class DualModeService extends ChangeNotifier {
   HttpServer? _httpServer;
   String? _currentIp;
   String? _myDeviceName;
+  String? _networkPassword;
 
   // Состояние
   bool _isServerRunning = false;
@@ -30,6 +33,7 @@ class DualModeService extends ChangeNotifier {
   List<SharedFile> get mySharedFiles => _mySharedFiles;
   List<PeerFile> get peerFiles => _peerFiles;
   MdnsService get mdns => _mdns;
+  String? get networkPassword => _networkPassword;
   // Запрос разрешения на storage
   Future<bool> requestStoragePermission() async {
     if (Platform.isAndroid) {
@@ -109,6 +113,7 @@ class DualModeService extends ChangeNotifier {
   }
   // Инициализация
   Future<void> initialize() async {
+    await _loadNetworkPassword();
     final hasPermission = await ensurePermissions();
     if (!hasPermission) {
       if (kDebugMode) {
@@ -129,6 +134,7 @@ class DualModeService extends ChangeNotifier {
       print('DualModeService инициализирован');
       print('   - Сервер: ${_isServerRunning ? "запущен" : "остановлен"}');
       print('   - Поиск: ${_mdns.isDiscovering ? "активен" : "неактивен"}');
+      print('   - Пароль сети: ${networkPassword != null ? "установлен" : "не установлен"}');
     }
   }
 
@@ -143,7 +149,7 @@ class DualModeService extends ChangeNotifier {
 
       // Регистрируем mDNS сервис
       final deviceName = await _getDeviceName();
-      await _mdns.registerService(deviceName, 8080);
+      await _mdns.registerService(deviceName, 8080, networkPassword: _networkPassword);
 
       // Обрабатываем входящие запросы
       _handleIncomingRequests();
@@ -391,10 +397,8 @@ class DualModeService extends ChangeNotifier {
 
   // Обновление списка пиров
   Future<void> _updatePeersFromMdns() async {
-    final currentPeerIds = _peers.map((p) => p.id).toSet();
-    final newPeerIds = _mdns.services.map((s) => s.name).toSet();
     final servicesCopy = _mdns.services.toList();
-
+    _peers.clear();
 
     for (var service in servicesCopy) {
       final serviceName = service.name ?? '';
@@ -405,6 +409,19 @@ class DualModeService extends ChangeNotifier {
         if (kDebugMode) print('Пропускаем своё устройство: $serviceName');
         continue;
       }
+      final servicePassword = _getPasswordFromService(service);
+
+      if (_networkPassword != null && _networkPassword!.isNotEmpty){
+        if (servicePassword != _networkPassword){
+          if (kDebugMode) {print("Пропускаем устройство ${serviceName}, пароль не совпадает");}
+          continue;
+        }
+      }
+      else if (servicePassword != null && servicePassword.isNotEmpty){
+        if (kDebugMode){print("Пропускаем устройсттво ${serviceName}, защищено паролем");}
+        continue;
+      }
+
 
       // Преобразуем .local имя в IP
       String? resolvedIp;
@@ -425,14 +442,22 @@ class DualModeService extends ChangeNotifier {
       }
 
       if (kDebugMode) print('Добавляем устройство: $serviceName → $resolvedIp:${service.port}');
+      final exist = _peers.any((peer) => peer.id == service.name || (peer.host == resolvedIp && peer.port == (service.port ?? 8080)));
 
-      _peers.add(PeerDevice(
-        id: service.name ?? 'unknown',
-        name: service.name ?? 'Unknown',
-        host: resolvedIp,
-        port: service.port ?? 8080,
-        lastSeen: DateTime.now(),
-      ));
+      if (!exist){
+        _peers.add(PeerDevice(
+          id: service.name ?? 'unknown',
+          name: service.name ?? 'Unknown',
+          host: resolvedIp,
+          port: service.port ?? 8080,
+          lastSeen: DateTime.now(),
+        ));
+        if (kDebugMode ) {print("Устройсво добавлено");}
+
+      } else{
+        if (kDebugMode) print("Устроство уже есть в списке, пропускаем");
+      }
+
     }
 
     notifyListeners();
@@ -643,10 +668,21 @@ class DualModeService extends ChangeNotifier {
   }
 
   Future<String> _getDeviceName() async {
+    String deviceModel = await _getReadableModel();
     final ip = await _getLocalIp();
-    return 'Device-${ip?.split('.').last ?? 'unknown'}';
+    final suffix = ip?.split(".").last ?? "unknown";
+    return '$deviceModel-$suffix';
   }
 
+  Future<String> _getReadableModel() async {
+    if (Platform.isAndroid) {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      return androidInfo.model.isNotEmpty ? androidInfo.model : 'Android';
+    }
+    else if (Platform.isWindows) return Platform.localHostname.split(".").first;
+    return "Device";
+
+  }
   String _formatHostForUrl(String host, int port) {
 
     if (host.contains(':') && !host.contains('.')) {
@@ -667,6 +703,40 @@ class DualModeService extends ChangeNotifier {
     final name = await _getDeviceName();
     _myDeviceName = name;
     return name;
+  }
+
+  Future<void> setNetworkPassword(String? password) async {
+    _networkPassword = (password != null && password.isNotEmpty) ? password : null;
+
+    final prefs = await SharedPreferences.getInstance();
+    if (_networkPassword != null) await prefs.setString('network_password', _networkPassword!);
+    else await prefs.remove('network_password');
+
+    if (_isServerRunning && _myDeviceName != null){
+      await _mdns.unregisterService();
+      await _mdns.registerService(_myDeviceName!,8080, networkPassword: _networkPassword);
+    }
+    await _mdns.stopDiscovery();
+    await _mdns.startDiscovery();
+    notifyListeners();
+  }
+
+  Future<void> _loadNetworkPassword() async {
+    final prefs = await SharedPreferences.getInstance();
+    _networkPassword = prefs.getString('network_password');
+  }
+
+  String? _getPasswordFromService(nsd.Service sercive){
+    final passwordBytes = sercive.txt?['password'];
+    if (passwordBytes != null){
+      try{
+        return utf8.decode(passwordBytes);
+      } catch (e){
+        return null;
+      }
+      return null;
+    }
+
   }
 }
 

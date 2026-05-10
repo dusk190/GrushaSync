@@ -18,31 +18,39 @@ class MdnsService extends ChangeNotifier {
   static const String serviceType = '_fileshare._tcp';
 
   // --- Регистрация сервиса ---
-  Future<bool> registerService(String serviceName, int port) async {
+  Future<bool> registerService(String serviceName, int port, {String? networkPassword}) async {
     await unregisterService();
 
     try {
+      final Map<String, Uint8List> txt = {
+        "device_name": Uint8List.fromList(utf8.encode(serviceName)),
+        "version": Uint8List.fromList(utf8.encode('1.0')),
+      };
+      if (networkPassword != null && networkPassword.isNotEmpty){
+        txt['password'] = Uint8List.fromList(utf8.encode(networkPassword));
+      }
       _registration = await nsd.register(nsd.Service(
         name: serviceName,
         type: serviceType,
         port: port,
         // Атрибуты в nsd должны быть в формате Map<String, Uint8List?>
-        txt: {
-          'device_name': Uint8List.fromList(utf8.encode(serviceName)),
-          'version': Uint8List.fromList(utf8.encode('1.0')),
-        },
+        txt: txt,
       ));
 
       notifyListeners();
 
       if (kDebugMode) {
-        print('✅ mDNS: Сервис "$serviceName" зарегистрирован на порту $port');
+
+        print('mDNS: Сервис "$serviceName" зарегистрирован на порту $port');
+        if (networkPassword != null && networkPassword.isNotEmpty){
+          print("Пароль установлен");
+        }
       }
 
       return true;
     } catch (e) {
       if (kDebugMode) {
-        print('❌ mDNS: Ошибка регистрации: $e');
+        print('mDNS: Ошибка регистрации: $e');
       }
       return false;
     }

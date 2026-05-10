@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:untitled3333333/widgets/MyDeviceFolder.dart';
 import 'package:provider/provider.dart';
 import '../services/dualModeService.dart';
+import '../screens/PasswordSettingScreen.dart';
 
 // Экран главного меню
 
@@ -36,6 +37,17 @@ class MyHomePageState extends State<MyHomePage> {
         // Полоса сверху экрана
         appBar: AppBar(
             actions: [
+              IconButton(
+                icon: const Icon(Icons.lock_outline),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PasswordSettingsScreen()),
+                  );
+                },
+                tooltip: 'Настройки сети',
+              ),
+
               // Кнопка переключения темной/светлой темы
               IconButton(
                 icon: Icon(Theme.of(context).brightness == Brightness.dark ? Icons.light_mode : Icons.dark_mode),
