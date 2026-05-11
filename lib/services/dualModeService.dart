@@ -24,6 +24,8 @@ class DualModeService extends ChangeNotifier {
   final List<SharedFile> _mySharedFiles = [];
   final List<PeerFile> _peerFiles = [];
   int _updateCounter = 0;
+  static const String _filesPath = "/BjhbfjKWkjn1217y8Fbkbhwkjijf";
+  static const String _downloadPath = "/WEJKFHLwiehffao29u4819fjnsj/download";
 
   // Геттеры
   int get updateCounter => _updateCounter;
@@ -34,6 +36,9 @@ class DualModeService extends ChangeNotifier {
   List<PeerFile> get peerFiles => _peerFiles;
   MdnsService get mdns => _mdns;
   String? get networkPassword => _networkPassword;
+  String get filesPath => _filesPath;
+  String get downloadPath => _downloadPath;
+
   // Запрос разрешения на storage
   Future<bool> requestStoragePermission() async {
     if (Platform.isAndroid) {
@@ -170,9 +175,9 @@ class DualModeService extends ChangeNotifier {
   // Обработка входящих HTTP запросов
   void _handleIncomingRequests() {
     _httpServer?.listen((HttpRequest request) async {
-
+      final path = request.uri.path;
       // GET /api/files - список файлов
-      if (request.uri.path == '/api/files') {
+      if (path == _filesPath) {
         final response = _generateFileListJson();
         request.response
           ..statusCode = 200
@@ -183,8 +188,8 @@ class DualModeService extends ChangeNotifier {
       }
 
       // GET /download/{filename} - скачивание файла
-      if (request.uri.path.startsWith('/download/')) {
-        final filename = request.uri.pathSegments.last;
+      if (path.startsWith(_downloadPath)) {
+        final filename = path.substring(_downloadPath.length + 1);
         await _handleDownloadRequest(request, filename);
         return;
       }
@@ -493,9 +498,9 @@ class DualModeService extends ChangeNotifier {
   // Получение списка файлов с пира
   Future<List<PeerFile>> fetchPeerFiles(PeerDevice peer) async {
     try {
-      final hostPort = _formatHostForUrl(peer.host, peer.port);
-      final url = Uri.http('${peer.host}:${peer.port}', '/api/files');
-      print('Запрос к ${peer.host}:${peer.port}/api/files');
+
+      final url = Uri.http('${peer.host}:${peer.port}', _filesPath);
+      print('Запрос к $url');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -527,7 +532,7 @@ class DualModeService extends ChangeNotifier {
   Future<bool> downloadFile(PeerDevice peer, PeerFile file, Function(double) onProgress) async {
     try {
       final hostPort = _formatHostForUrl(peer.host, peer.port);
-      final url = Uri.http(hostPort, '/download/${file.name}');
+      final url = Uri.http('${peer.host}:${peer.port}', '$_downloadPath/${file.name}');
       final request = http.Request('GET', url);
       final response = await request.send();
 
