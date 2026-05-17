@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:untitled3333333/widgets/MyDeviceFolder.dart';
+import '../widgets/MyDeviceFolder.dart';
 import 'package:provider/provider.dart';
 import '../services/dualModeService.dart';
 import '../screens/PasswordSettingScreen.dart';
@@ -40,10 +40,12 @@ class MyHomePageState extends State<MyHomePage> {
               IconButton(
                 icon: const Icon(Icons.lock_outline),
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PasswordSettingsScreen()),
-                  );
+                    Navigator.push(context, PageRouteBuilder(
+                      pageBuilder: (context, anim, secAnim) => PasswordSettingsScreen(),
+                      transitionDuration: Duration.zero,
+                      reverseTransitionDuration: Duration.zero,
+                    ),
+                    );
                 },
                 tooltip: 'Настройки сети',
               ),
@@ -60,9 +62,9 @@ class MyHomePageState extends State<MyHomePage> {
                 future: _deviceName,
                 builder: (context, snapshot) {
                   if (snapshot.hasData) {
-                    return Text("GrushaSync (${snapshot.data})");
+                    return Text("GS (${snapshot.data})");
                   }
-                  return const Text("GrushaSync (загрузка...)");
+                  return const Text("GS (загрузка...)");
                 },
             ),
             // Декоративная полоска для разделения appBar и body

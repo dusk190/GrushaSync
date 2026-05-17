@@ -11,7 +11,14 @@ class PasswordSettingsScreen extends StatefulWidget {
 
 class _PasswordSettingsScreenState extends State<PasswordSettingsScreen> {
   final TextEditingController _passwordController = TextEditingController();
+  final FocusNode _passwordFocusNode = FocusNode();
   bool _isObscure = true;
+
+  // @override
+  // void dispose() {
+  //   _passwordFocusNode.dispose(); // Обязательно освобождаем ресурсы
+  //   super.dispose();
+  // }
 
   @override
   void initState() {
@@ -34,20 +41,21 @@ class _PasswordSettingsScreenState extends State<PasswordSettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Пароль сети',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 8),
             const Text(
               'Устройства с одинаковым паролем видят друг друга.\n'
                   'Оставьте поле пустым для открытой сети.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 14, color: Color(0xff656565)),
             ),
             const SizedBox(height: 20),
             TextField(
               controller: _passwordController,
               obscureText: _isObscure,
+              //focusNode: _passwordFocusNode,
               decoration: InputDecoration(
                 labelText: 'Пароль',
                 border: const OutlineInputBorder(),
@@ -63,6 +71,18 @@ class _PasswordSettingsScreenState extends State<PasswordSettingsScreen> {
             ),
             const SizedBox(height: 20),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                fixedSize: const Size(380, 70),
+                backgroundColor: Theme.of(context).colorScheme.secondary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    side: BorderSide(
+                        color: Theme.of(context).colorScheme.primary, width: 2
+                    )
+                ),
+                elevation: 0,
+                minimumSize: const Size(double.infinity, 50),
+              ),
               onPressed: () async {
                 final newPassword = _passwordController.text;
                 await service.setNetworkPassword(
@@ -75,10 +95,7 @@ class _PasswordSettingsScreenState extends State<PasswordSettingsScreen> {
                   Navigator.pop(context);
                 }
               },
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 50),
-              ),
-              child: const Text('Сохранить'),
+              child: Text('Сохранить', style: Theme.of(context).textTheme.bodyMedium,),
             ),
             const SizedBox(height: 20),
             if (service.networkPassword != null && service.networkPassword!.isNotEmpty)

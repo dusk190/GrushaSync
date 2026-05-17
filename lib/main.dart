@@ -4,7 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/dualModeService.dart';
-import 'package:untitled3333333/screens/MyHomePage.dart';
+import '../screens/MyHomePage.dart';
 import '../services/ConfigService.dart';
 
 void main() async {

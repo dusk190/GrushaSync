@@ -10,7 +10,7 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <application
-        android:label="untitled3333333"
+        android:label="GrushaSync"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         android:label="GrushaSync"

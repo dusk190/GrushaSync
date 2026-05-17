@@ -10,7 +10,10 @@ class ConfigService {
   }
 
   static set isDarkMode(bool value) => _prefs.setBool('isDarkMode', value);
-
   static bool? get isDarkMode => _prefs.getBool('isDarkMode');
+  //static Future<bool> setDarkMode(bool value) async => await _prefs.setBool('isDarkMode', value);
 
+  static String? get netPass => _prefs.getString('network_password');
+  static Future<bool> setNetPass(String value) async => await _prefs.setString('network_password', value);
+  static Future<bool> removePass() async => await _prefs.remove('network_password');
 }

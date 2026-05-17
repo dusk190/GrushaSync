@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/ConfigService.dart';
 import 'mdnsService.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -708,9 +709,8 @@ class DualModeService extends ChangeNotifier {
   Future<void> setNetworkPassword(String? password) async {
     _networkPassword = (password != null && password.isNotEmpty) ? password : null;
 
-    final prefs = await SharedPreferences.getInstance();
-    if (_networkPassword != null) await prefs.setString('network_password', _networkPassword!);
-    else await prefs.remove('network_password');
+    if (_networkPassword != null) await ConfigService.setNetPass(_networkPassword!);
+    else await ConfigService.removePass();
 
     if (_isServerRunning && _myDeviceName != null){
       await _mdns.unregisterService();
@@ -722,8 +722,7 @@ class DualModeService extends ChangeNotifier {
   }
 
   Future<void> _loadNetworkPassword() async {
-    final prefs = await SharedPreferences.getInstance();
-    _networkPassword = prefs.getString('network_password');
+    _networkPassword = ConfigService.netPass;
   }
 
   String? _getPasswordFromService(nsd.Service sercive){

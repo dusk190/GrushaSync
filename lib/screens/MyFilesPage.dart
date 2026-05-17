@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:untitled3333333/widgets/MyFile.dart';
+import '../widgets/MyFile.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import '../services/dualModeService.dart';

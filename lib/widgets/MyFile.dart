@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:untitled3333333/services/dualModeService.dart';
+import '../services/dualModeService.dart';
 
 // Виджет: полученный от пира файл, который можно скачать
 
