@@ -22,7 +22,7 @@ class MyFilesPageState extends State<MyFilesPage> {
 
     return Scaffold(
         appBar: AppBar(
-          leadingWidth: 56*2,
+          leadingWidth: 56,
           leading: Row(children: [const SizedBox(width: 5),
             // Выход в главное меню
             IconButton(
@@ -30,7 +30,6 @@ class MyFilesPageState extends State<MyFilesPage> {
               icon: const Icon(Icons.arrow_back_ios),
               onPressed: () => Navigator.pop(context),
             ),
-            const SizedBox(width: 5),
             //here been sortdialog
             ],
           ),

@@ -51,6 +51,7 @@ class MyAppState extends State<MyApp> {
           colorScheme: ColorScheme.light(
               primary: Color(0xff8f8f8f),
               secondary: Color(0xfff4f4f4),
+              onSecondary: Color(0xff171717),
               surface: Color(0xffe6e6e6)
           ),
         ),
