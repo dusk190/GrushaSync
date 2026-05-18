@@ -1,9 +1,49 @@
 import 'package:flutter/material.dart';
 import '../widgets/MyDeviceFolder.dart';
 import 'package:provider/provider.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:android_intent_plus/flag.dart';
+import 'dart:io';
 import '../services/dualModeService.dart';
 import '../screens/PasswordSettingScreen.dart';
+// Ыункция для открытия папки
+Future<void> _openGrushaFolder() async {
+  try {
+    Directory grushaDir;
+    if (Platform.isWindows){
+      final downloadPath = '${Platform.environment['USERPROFILE']}\\Downloads\\GrushaSync';
+      grushaDir = Directory(downloadPath);
+      if (!await grushaDir.exists()){
+        await grushaDir.create(recursive: true);
+      }
+      await Process.start('explorer', [grushaDir.path]);
+    }
+    else if (Platform.isAndroid){
+      final downloadDir = await getDownloadsDirectory();
+      if (downloadDir == null){
+        print("Не удалось получить доступ к папке Загрузки");
+        return;
+      }
+      grushaDir = Directory("${downloadDir.path}/GrushaSync");
+      if (!await grushaDir.exists()){
+        await grushaDir.create(recursive: true);
+      }
+      final AndroidIntent intent = AndroidIntent(
+        action: "android.intent.action.VIEW",
+        data: Uri.encodeFull(grushaDir.path),
+        type: '*/*',
+        flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+      );
+      await intent.launch();
 
+    }
+
+  } catch (e){
+    print("Ошибка открытия папки $e");
+
+  }
+}
 // Экран главного меню
 
 class MyHomePage extends StatefulWidget {
@@ -37,6 +77,11 @@ class MyHomePageState extends State<MyHomePage> {
         // Полоса сверху экрана
         appBar: AppBar(
             actions: [
+              IconButton(
+                icon: const Icon(Icons.folder_open),
+                onPressed: _openGrushaFolder,
+                tooltip: "Открыть папку GrushaSync",
+              ),
               IconButton(
                 icon: const Icon(Icons.lock_outline),
                 onPressed: () {
