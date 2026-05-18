@@ -6,12 +6,15 @@ import 'package:provider/provider.dart';
 import 'services/dualModeService.dart';
 import '../screens/MyHomePage.dart';
 import '../services/ConfigService.dart';
-
+import 'package:window_manager/window_manager.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ConfigService.init();
+  await windowManager.ensureInitialized();
+  await windowManager.setMinimumSize(const Size(550, 600));
+  await windowManager.setSize(const Size(900, 700));
   runApp(
-    // Че этот провайдер делает, вопрос к беку
+    // Че этот провайдер делает, вопрос к беку. Важное
     ChangeNotifierProvider(
       create: (_) => DualModeService(),
       child: const MyApp(),
