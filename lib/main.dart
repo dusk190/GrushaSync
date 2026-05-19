@@ -5,14 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/dualModeService.dart';
 import '../screens/MyHomePage.dart';
+import 'dart:io';
 import '../services/ConfigService.dart';
 import 'package:window_manager/window_manager.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ConfigService.init();
-  await windowManager.ensureInitialized();
-  await windowManager.setMinimumSize(const Size(550, 600));
-  await windowManager.setSize(const Size(900, 700));
+  if (Platform.isWindows){
+    await windowManager.ensureInitialized();
+    await windowManager.setMinimumSize(const Size(550, 600));
+    await windowManager.setSize(const Size(900, 700));
+  }
   runApp(
     // Че этот провайдер делает, вопрос к беку. Важное
     ChangeNotifierProvider(
