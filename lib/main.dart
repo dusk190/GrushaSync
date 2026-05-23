@@ -13,6 +13,7 @@ void main() async {
   await ConfigService.init();
   if (Platform.isWindows){
     await windowManager.ensureInitialized();
+    await windowManager.setMaximumSize(const Size(900,867));
     await windowManager.setMinimumSize(const Size(550, 600));
     await windowManager.setSize(const Size(900, 700));
   }
