@@ -410,6 +410,11 @@ class DualModeService extends ChangeNotifier {
     }
   }
 
+  Future<void> refreshMdns() async {
+    await mdns.stopDiscovery();
+    await mdns.startDiscovery();
+    await _updatePeersFromMdns();
+  }
 
   // Обновление списка пиров
   Future<void> _updatePeersFromMdns() async {

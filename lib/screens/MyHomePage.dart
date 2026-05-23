@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:grushasync/widgets/MyDialButton.dart';
@@ -90,6 +92,11 @@ class MyHomePageState extends State<MyHomePage> {
                   MyDialButton(icon: Icon(Theme.of(context).brightness == Brightness.dark ? Icons.light_mode : Icons.dark_mode),
                       onTap: widget.changeTheme,
                       context: context),
+                  if (Platform.isWindows)
+                    MyDialButton(
+                      icon: Icon(Icons.refresh),
+                      onTap: service.refreshMdns,
+                      context: context)
                 ]),
               SizedBox(width: 5,)
             ],
@@ -117,9 +124,11 @@ class MyHomePageState extends State<MyHomePage> {
 
         // Список пиров, билдится как панели-кнопки,
         // либо сообщение об отсутствии устройств в области видимости
-        body: peers.isEmpty ?
+        body: RefreshIndicator(
+        onRefresh: service.refreshMdns,
+        child: peers.isEmpty ?
         const Center(
-          child: Column(
+          child: SingleChildScrollView(child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.wifi_find_outlined, size: 64, color: Colors.grey),
@@ -128,7 +137,9 @@ class MyHomePageState extends State<MyHomePage> {
               Text('в сети не обнаружены')
             ],
           ),
-        ) :
+        )
+        )
+         :
         ListView.builder(
             padding: const EdgeInsets.all(14),
             itemCount: peers.length,
@@ -139,6 +150,7 @@ class MyHomePageState extends State<MyHomePage> {
                 child: MyDeviceFolder(peer),
               );
             }),
+        )
 
         /*
         floatingActionButton: FloatingActionButton(
