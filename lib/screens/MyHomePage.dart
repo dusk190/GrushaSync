@@ -127,17 +127,22 @@ class MyHomePageState extends State<MyHomePage> {
         body: RefreshIndicator(
         onRefresh: service.refreshMdns,
         child: peers.isEmpty ?
-        const Center(
-          child: SingleChildScrollView(child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.wifi_find_outlined, size: 64, color: Colors.grey),
-              SizedBox(height: 16),
-              Text('Другие устройства'),
-              Text('в сети не обнаружены')
-            ],
-          ),
-        )
+        SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Container(
+              // Растягиваем контейнер на всю высоту экрана минус высота AppBar и отступов
+              height: MediaQuery.of(context).size.height - kToolbarHeight - MediaQuery.of(context).padding.top,
+              alignment: Alignment.center,
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.wifi_find_outlined, size: 64, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('Другие устройства'),
+                  Text('в сети не обнаружены'),
+                ],
+              ),
+            ),
         )
          :
         ListView.builder(
