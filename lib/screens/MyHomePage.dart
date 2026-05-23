@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'package:grushasync/widgets/MyDialButton.dart';
 import 'package:provider/provider.dart';
 
 import '../widgets/MyDeviceFolder.dart';
@@ -60,6 +61,8 @@ class MyHomePageState extends State<MyHomePage> {
                 elevation: 0,
                 spacing: 7,
                 buttonSize: Size(46, 46),
+                childPadding: EdgeInsets.zero,
+                spaceBetweenChildren: 5,
 
                 direction: SpeedDialDirection.down,
                   closeDialOnPop: true,
@@ -68,39 +71,32 @@ class MyHomePageState extends State<MyHomePage> {
                 renderOverlay: false,
                 children: [
                   // Открытие папки груши в проводнике
-                  SpeedDialChild(
-                    child: const Icon(Icons.folder_open),
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    elevation: 0,
-                    onTap: Opengrushafolder.openFolder,
-                  ),
+                  MyDialButton(
+                      icon: Icon(Icons.folder_open),
+                      onTap: Opengrushafolder.openFolder,
+                      context: context),
                   // Изменение пароля сети (переход на другой экран)
-                  SpeedDialChild(
-                    child: const Icon(Icons.lock_outline),
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    elevation: 0,
-                    onTap: () {
-                      Navigator.push(context, PageRouteBuilder(
-                        pageBuilder: (context, anim, secAnim) => PasswordSettingsScreen(),
-                        transitionDuration: Duration.zero,
-                        reverseTransitionDuration: Duration.zero,
-                        ),
-                      );
-                    },
-                  ),
+                  MyDialButton(
+                      icon: Icon(Icons.lock_outline),
+                      onTap: () {
+                        Navigator.push(context, PageRouteBuilder(
+                          pageBuilder: (context, anim, secAnim) => PasswordSettingsScreen(),
+                          transitionDuration: Duration.zero,
+                          reverseTransitionDuration: Duration.zero,
+                        ),);
+                      },
+                      context: context),
                   // Переключение темной/светлой темы
-                  SpeedDialChild(
-                    child: Icon(Theme.of(context).brightness == Brightness.dark ? Icons.light_mode : Icons.dark_mode),
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    elevation: 0,
-                    onTap: widget.changeTheme,
-                  ),
+                  MyDialButton(icon: Icon(Theme.of(context).brightness == Brightness.dark ? Icons.light_mode : Icons.dark_mode),
+                      onTap: widget.changeTheme,
+                      context: context),
                 ]),
               SizedBox(width: 5,)
             ],
-            titleTextStyle: Theme.of(context).textTheme.displayLarge,
+
             backgroundColor: Theme.of(context).colorScheme.secondary,
             // Название нашего устройства
+            titleTextStyle: Theme.of(context).textTheme.displayLarge,
             title: FutureBuilder<String>(
                 future: _deviceName,
                 builder: (context, snapshot) {
