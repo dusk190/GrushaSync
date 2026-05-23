@@ -71,8 +71,9 @@ class DualModeService extends ChangeNotifier {
         final images = await Permission.photos.request();
         final videos = await Permission.videos.request();
         final audio = await Permission.audio.request();
+        final storage = await Permission.manageExternalStorage.request();
 
-        final allGranted = images.isGranted && videos.isGranted && audio.isGranted;
+        final allGranted = images.isGranted && videos.isGranted && audio.isGranted && storage.isGranted;
 
         if (allGranted) {
           if (kDebugMode) print('Разрешения для медиа получены андроид 13+');
@@ -239,8 +240,9 @@ class DualModeService extends ChangeNotifier {
   }
 
   // Обработка запроса на скачивание
-  Future<void> _handleDownloadRequest(HttpRequest request, String filename) async {
+  Future<void> _handleDownloadRequest(HttpRequest request, String encodeFilename) async {
     try {
+      final filename = Uri.decodeComponent(encodeFilename);
       // Ищем файл в списке общих файлов
       final fileInfo = _mySharedFiles.firstWhere(
             (f) => f.name == filename,
@@ -285,7 +287,7 @@ class DualModeService extends ChangeNotifier {
 
     } catch (e) {
       if (kDebugMode) {
-        print('Ошибка отправки файла $filename: $e');
+        print('Ошибка отправки файла $encodeFilename: $e');
       }
 
       try {
