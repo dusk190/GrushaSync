@@ -67,14 +67,14 @@ class MyAppState extends State<MyApp> {
           brightness: Brightness.dark,
           textTheme: myTextTheme,
           colorScheme: ColorScheme.dark(
-            primary: Color(0xff4e4e6a),
+            primary: Color(0xff5b5b5e),
             onPrimary: Colors.white,
 
             //0xff313157
-            secondary: Color(0xff383851),
+            secondary: Color(0xff39393a),
             onSecondary: Colors.white,
 
-            surface: Color(0xff2b2b35),
+            surface: Color(0xff2d2d2e),
           ),
 
         ),
