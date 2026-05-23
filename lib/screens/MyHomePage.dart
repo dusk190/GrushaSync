@@ -119,8 +119,21 @@ class MyHomePageState extends State<MyHomePage> {
               ),)
         ),
 
-        // Список пиров, билдится как панели-кнопки
-        body: ListView.builder(
+        // Список пиров, билдится как панели-кнопки,
+        // либо сообщение об отсутствии устройств в области видимости
+        body: peers.isEmpty ?
+        const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.wifi_find_outlined, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text('Другие устройства'),
+              Text('в сети не обнаружены')
+            ],
+          ),
+        ) :
+        ListView.builder(
             padding: const EdgeInsets.all(14),
             itemCount: peers.length,
             itemBuilder: (context, index) {
