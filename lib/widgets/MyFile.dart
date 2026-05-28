@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/dualModeService.dart';
@@ -53,9 +55,11 @@ class MyFileState extends State<MyFile> {
   @override
   Widget build(BuildContext context) {
     // hi
-    return Center(child: ElevatedButton(
+    return Padding(padding: EdgeInsetsGeometry.symmetric(horizontal: Platform.isWindows ? 16 : 0),
+        child: ElevatedButton(
       style: ElevatedButton.styleFrom(
-        fixedSize: const Size(380, 70),
+        minimumSize: const Size(double.infinity, 70),
+        maximumSize: const Size(double.infinity, 70),
         backgroundColor: Theme.of(context).colorScheme.secondary,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),

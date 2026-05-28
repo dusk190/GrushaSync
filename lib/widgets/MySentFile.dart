@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/dualModeService.dart';
@@ -17,8 +19,9 @@ class MySentFileState extends State<MySentFile> {
   @override
   Widget build(BuildContext context) {
     // Панель с информацией о файле
-    return Center(child: Container(
-      width: 380,
+    return Padding(padding: EdgeInsetsGeometry.symmetric(horizontal: Platform.isWindows ? 16 : 0),
+        child: Container(
+      width: double.infinity,
       height: 70,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
