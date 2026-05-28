@@ -285,13 +285,15 @@ class DualModeService extends ChangeNotifier {
         print('Файл отправлен: $filename (${_formatSize(fileSize)})');
         //print("Местоположение отправленного файла : ${file.path}");
         // здес удалять этот файл из кеша файл пикера на андроиде
-        if (Platform.isAndroid) {
-          print('Файл удален из кэша: ${file.path}');
 
-          await file.delete();
-        }
-        removeSharedFile(filename);
       }
+
+      if (Platform.isAndroid) {
+        print('Файл удален из кэша: ${file.path}');
+
+        await file.delete();
+      }
+      removeSharedFile(filename);
 
     } catch (e) {
       if (kDebugMode) {
