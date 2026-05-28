@@ -33,6 +33,11 @@ class _PasswordSettingsScreenState extends State<PasswordSettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          padding: const EdgeInsets.only(left: 10),
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text('Настройки сети'),
         backgroundColor: Theme.of(context).colorScheme.secondary,
       ),

@@ -605,10 +605,18 @@ class DualModeService extends ChangeNotifier {
       int bytesReceived = 0;
       final contentLength = response.contentLength ?? file.size;
 
+      int lastUpdateTime = 0;
+
       await for (var chunk in response.stream) {
         sink.add(chunk);
         bytesReceived += chunk.length;
-        onProgress(bytesReceived / contentLength);
+
+        final currentTime = DateTime.now().millisecondsSinceEpoch;
+        if (currentTime - lastUpdateTime > 30 || bytesReceived == contentLength) {
+          onProgress(bytesReceived / contentLength);
+          lastUpdateTime = currentTime;
+
+        }
       }
 
       await sink.close();

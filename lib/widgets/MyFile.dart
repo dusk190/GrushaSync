@@ -16,6 +16,7 @@ class MyFile extends StatefulWidget {
 
 class MyFileState extends State<MyFile> {
   bool _isDownloading = false;
+  final ValueNotifier<double> downloadProgress = ValueNotifier<double>(0.0);
   // Функция загрузки данного файла с устройства-пира в папку GrushaSync в дефолтной директории загрузок
   Future<void> _downloadFile() async {
     setState(() => _isDownloading = true);
@@ -28,7 +29,8 @@ class MyFileState extends State<MyFile> {
           widget.peer,
           widget.file,
               (progress) {
-            print('Прогресс: ${(progress * 100).toInt()}%');
+            //print('Прогресс: ${(progress * 100).toInt()}%;');
+            downloadProgress.value = progress;
           }
       );
       success = true;
@@ -94,6 +96,16 @@ class MyFileState extends State<MyFile> {
                     style: Theme.of(context).textTheme.bodySmall,),
                   ]
                 ),
+                if (_isDownloading)
+                  ValueListenableBuilder<double>(
+                    valueListenable: downloadProgress,
+                    builder: (context, progressValue, child) {
+                      return LinearProgressIndicator(
+                        value: progressValue,
+                        color: Colors.green,
+                      );
+                    },
+                  ),
               ],
             ),
           ),
