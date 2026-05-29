@@ -73,7 +73,7 @@ class MySentFileState extends State<MySentFile> {
                 final service = Provider.of<DualModeService>(context, listen: false);
                 // Тут уведомляются устройства, которым мы расшарили этот файл,
                 // и у них перерисовывается список файлов
-                service.removeSharedFile(widget.file.name);
+                service.removeSharedFile(widget.file.name, notifyPeers: true);
               },
               icon: const Icon(Icons.close, color: Colors.grey)
           ),

@@ -9,52 +9,42 @@ import '../services/dualModeService.dart';
 class MyFile extends StatefulWidget {
   final PeerFile file;
   final PeerDevice peer;
+  final VoidCallback? onDownloaded;   // новый колбэк
 
-  const MyFile({super.key, required this.file, required this.peer});
+  const MyFile({
+    Key? key,
+    required this.file,
+    required this.peer,
+    this.onDownloaded,
+  }) : super(key: key);
 
   @override
   createState() => MyFileState();
 }
 
 class MyFileState extends State<MyFile> {
-  bool _isDownloading = false;
-  final ValueNotifier<double> downloadProgress = ValueNotifier<double>(0.0);
   // Функция загрузки данного файла с устройства-пира в папку GrushaSync в дефолтной директории загрузок
   Future<void> _downloadFile() async {
-    setState(() => _isDownloading = true);
-
     final service = Provider.of<DualModeService>(context, listen: false);
-
-    bool success = false;
+    final fileName = widget.file.name;
     try {
       await service.downloadFile(
           widget.peer,
           widget.file,
               (progress) {
-            //print('Прогресс: ${(progress * 100).toInt()}%;');
-            downloadProgress.value = progress;
+            service.getProgressNotifier(fileName).value = progress;
           }
       );
-      success = true;
-    } catch (e) {
-      success = false;
-    }
-    // По окончании загрузки уведомляем пользователя, если он не вышел в основное меню
-    if (mounted) {
-      setState(() => _isDownloading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success
-              ? 'Файл "${widget.file.name}" скачан в папку Загрузки/GrushaSync'
-              : 'Ошибка при скачивании "${widget.file.name}"'),
-        ),
-      );
-    }
+      widget.onDownloaded?.call();
+    } catch (e) {}
   }
 
   @override
   Widget build(BuildContext context) {
     // hi
+    final service = Provider.of<DualModeService>(context);
+    final isDownloading = service.isFileDownloading(widget.file.name);
+    final progressNotifier = service.getProgressNotifier(widget.file.name);
     return Padding(padding: EdgeInsetsGeometry.symmetric(horizontal: Platform.isWindows ? 16 : 0),
         child: ElevatedButton(
       style: ElevatedButton.styleFrom(
@@ -70,7 +60,7 @@ class MyFileState extends State<MyFile> {
         elevation: 0,
       ),
       // Логика, вызывается при нажатии на всю табличку файла
-      onPressed: _isDownloading ? null : _downloadFile,
+      onPressed: isDownloading ? null : _downloadFile,
       // Содержание кнопки
       child: Row(
         children: [
@@ -100,9 +90,9 @@ class MyFileState extends State<MyFile> {
                     style: Theme.of(context).textTheme.bodySmall,),
                   ]
                 ),
-                if (_isDownloading)
+                if (isDownloading)
                   ValueListenableBuilder<double>(
-                    valueListenable: downloadProgress,
+                    valueListenable: progressNotifier,
                     builder: (context, progressValue, child) {
                       return LinearProgressIndicator(
                         value: progressValue,
@@ -116,7 +106,7 @@ class MyFileState extends State<MyFile> {
 
           // Иконка загрузки в правой части виджета, которая меняется на индикатор на время скачивания
           const SizedBox(width: 16),
-          if (_isDownloading)
+          if (isDownloading)
             const SizedBox(
               width: 24,
               height: 24,

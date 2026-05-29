@@ -293,7 +293,7 @@ class DualModeService extends ChangeNotifier {
 
         await file.delete();
       }
-      removeSharedFile(filename);
+      removeSharedFile(filename, notifyPeers: false);
 
     } catch (e) {
       if (kDebugMode) {
@@ -366,11 +366,14 @@ class DualModeService extends ChangeNotifier {
       }
     }
   }
-  void removeSharedFile(String name) {
+
+  void removeSharedFile(String name, {bool notifyPeers = false}) {
     _mySharedFiles.removeWhere((f) => f.name == name);
     notifyListeners();
     // Оповещаем всех пиров об обновлении
-    _notifyPeersAboutUpdate();
+    if (notifyPeers) {
+      _notifyPeersAboutUpdate();
+    }
   }
 
   // Обработка изменений mDNS
@@ -600,6 +603,10 @@ class DualModeService extends ChangeNotifier {
         counter++;
       }
 
+      downloadingStates[file.name] = true;
+      notifyListeners(); // Уведомляем систему
+
+
       print('Сохраняем в: $finalPath');
       final outputFileFinal = File(finalPath);
       final sink = outputFileFinal.openWrite();
@@ -614,7 +621,8 @@ class DualModeService extends ChangeNotifier {
         bytesReceived += chunk.length;
 
         final currentTime = DateTime.now().millisecondsSinceEpoch;
-        if (currentTime - lastUpdateTime > 30 || bytesReceived == contentLength) {
+        if (currentTime - lastUpdateTime > 100 || bytesReceived == contentLength) {
+          //getProgressNotifier(file.name).value = bytesReceived / contentLength
           onProgress(bytesReceived / contentLength);
           lastUpdateTime = currentTime;
 
@@ -622,6 +630,8 @@ class DualModeService extends ChangeNotifier {
       }
 
       await sink.close();
+      downloadingStates[file.name] = false;
+      notifyListeners();
 
       // Проверяем, что файл действительно создался
       if (await outputFileFinal.exists()) {
@@ -749,6 +759,17 @@ class DualModeService extends ChangeNotifier {
     await _mdns.stopDiscovery();
     await _mdns.startDiscovery();
     notifyListeners();
+  }
+
+  // Прогресс для каждого скачиваемого файла
+  final Map<String, ValueNotifier<double>> downloadProgresses = {};
+  // Качается ли файл прямо сейчас
+  final Map<String, bool> downloadingStates = {};
+
+  bool isFileDownloading(String fileName) => downloadingStates[fileName] ?? false;
+
+  ValueNotifier<double> getProgressNotifier(String fileName) {
+    return downloadProgresses.putIfAbsent(fileName, () => ValueNotifier<double>(0.0));
   }
 
   Future<void> _loadNetworkPassword() async {
