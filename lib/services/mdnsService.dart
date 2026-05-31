@@ -63,7 +63,7 @@ class MdnsService extends ChangeNotifier {
 
     try {
       // Используем префикс nsd для вызова функции из пакета
-      _discovery = await nsd.startDiscovery(serviceType);
+      _discovery = await nsd.startDiscovery(serviceType, ipLookupType: nsd.IpLookupType.any);
 
       _discovery?.addListener(() {
         _services.clear();
