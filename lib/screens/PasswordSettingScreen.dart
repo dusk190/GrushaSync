@@ -40,6 +40,12 @@ class _PasswordSettingsScreenState extends State<PasswordSettingsScreen> {
         ),
         title: const Text('Настройки сети'),
         backgroundColor: Theme.of(context).colorScheme.secondary,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(2),
+          child: Container(
+            color: Theme.of(context).colorScheme.primary,
+            height: 2,
+          ),)
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
