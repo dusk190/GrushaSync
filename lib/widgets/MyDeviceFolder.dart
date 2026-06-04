@@ -91,17 +91,4 @@ class MyDeviceFolderState extends State<MyDeviceFolder> {
       ),
     );
   }
-
-/*
-  void availToFalse () {
-    setState(() {
-      deviceConnected = false;
-    });
-  }
-
-  void availToTrue () {
-    setState(() {
-      deviceAvailable = true;
-    });
-  } */
 }

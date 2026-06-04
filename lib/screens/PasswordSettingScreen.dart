@@ -11,14 +11,7 @@ class PasswordSettingsScreen extends StatefulWidget {
 
 class _PasswordSettingsScreenState extends State<PasswordSettingsScreen> {
   final TextEditingController _passwordController = TextEditingController();
-  final FocusNode _passwordFocusNode = FocusNode();
   bool _isObscure = true;
-
-  // @override
-  // void dispose() {
-  //   _passwordFocusNode.dispose(); // Обязательно освобождаем ресурсы
-  //   super.dispose();
-  // }
 
   @override
   void initState() {

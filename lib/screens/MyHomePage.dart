@@ -167,24 +167,6 @@ class MyHomePageState extends State<MyHomePage> {
               );
             }),
         )
-
-        /*
-        floatingActionButton: FloatingActionButton(
-            onPressed: () async {
-              final String? selectedName = await showDialog<String>(
-                context: context,
-                builder: (context) => DeviceSelectionDialog(availableDevices: availableDevices,),
-              );
-              if (selectedName != null) {
-                setState(() {
-                  currentDevices.add(selectedName);
-                  availableDevices.remove(selectedName);
-                });
-              }
-              },
-          tooltip: 'Добавить устройство',
-          child: const Icon(Icons.add),
-        ),*/
     );
   }
 }
