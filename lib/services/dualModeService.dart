@@ -56,7 +56,7 @@ class DualModeService extends ChangeNotifier {
   }
 
   // Открыть настройки приложения (если разрешение отклонено навсегда)
-  Future<void> openAppSettings() async {
+  Future<void> openSettings() async {
     await openAppSettings();
   }
   // Проверка и запрос всех необходимых разрешений при старте
@@ -155,8 +155,7 @@ class DualModeService extends ChangeNotifier {
       _myDeviceName = await _getDeviceName();
 
       // Регистрируем mDNS сервис
-      final deviceName = await _getDeviceName();
-      await _mdns.registerService(deviceName, 8080, networkPassword: _networkPassword);
+      await _mdns.registerService(_myDeviceName!, 8080, ip: _currentIp, networkPassword: _networkPassword);
 
       // Обрабатываем входящие запросы
       _handleIncomingRequests();
@@ -448,23 +447,55 @@ class DualModeService extends ChangeNotifier {
         continue;
       }
 
-
-      // Преобразуем .local имя в IP
+      // Определяем IP адрес пира (TXT-запись -> addresses -> host -> DNS lookup)
       String? resolvedIp;
 
-      if (serviceHost.endsWith('.local')) {
-        if (kDebugMode) print('Разрешаем имя: $serviceHost');
-        resolvedIp = await _resolveLocalHostname(serviceHost);
+      // 1. IP из mDNS TXT-записи (наиболее надежный способ в LAN/Wi-Fi)
+      final txtIp = _getIpFromService(service);
+      if (txtIp != null && txtIp.isNotEmpty) {
+        resolvedIp = txtIp;
+        if (kDebugMode) print('IP получен из TXT-записи $serviceName: $resolvedIp');
+      }
 
-        if (resolvedIp == null) {
-          if (kDebugMode) print('Не удалось разрешить $serviceHost, пропускаем');
+      // 2. IP из разрешенных адресов nsd, если плагин их заполнил
+      if (resolvedIp == null && service.addresses != null) {
+        for (var addr in service.addresses!) {
+          if (addr.type == InternetAddressType.IPv4) {
+            resolvedIp = addr.address;
+            if (kDebugMode) print('IP получен из service.addresses: $resolvedIp');
+            break;
+          }
+        }
+      }
+
+      // 3. Если serviceHost уже является корректным IPv4
+      if (resolvedIp == null) {
+        final parsed = InternetAddress.tryParse(serviceHost);
+        if (parsed != null && parsed.type == InternetAddressType.IPv4) {
+          resolvedIp = parsed.address;
+        }
+      }
+
+      // 4. Если имя оканчивается на .local или это хостнейм — пробуем отрезолвить
+      if (resolvedIp == null) {
+        if (serviceHost.contains(':') || serviceHost.contains('%')) {
+          if (kDebugMode) print('Пропускаем IPv6 адрес: $serviceHost');
           continue;
         }
-      } else if (serviceHost.contains(':') || serviceHost.contains('%')) {
-        if (kDebugMode) print('Пропускаем IPv6 адрес: $serviceHost');
+
+        if (kDebugMode) print('Разрешаем имя: $serviceHost');
+        resolvedIp = await _resolveLocalHostname(serviceHost);
+      }
+
+      if (resolvedIp == null) {
+        if (kDebugMode) print('Не удалось разрешить $serviceHost, пропускаем');
         continue;
-      } else {
-        resolvedIp = serviceHost;
+      }
+
+      // Пропускаем, если IP совпадает с собственным (защита от добавления себя)
+      if (_currentIp != null && resolvedIp == _currentIp) {
+        if (kDebugMode) print('Пропускаем свой собственный IP: $resolvedIp');
+        continue;
       }
 
       if (kDebugMode) print('Добавляем устройство: $serviceName → $resolvedIp:${service.port}');
@@ -497,9 +528,10 @@ class DualModeService extends ChangeNotifier {
   }
 
   Future<String?> _resolveLocalHostname(String hostname) async {
+    // 1. Сначала пробуем как есть (с .local)
     try {
-      final cleanHostname = hostname.replaceAll('.local', '');
-      final addresses = await InternetAddress.lookup(cleanHostname);
+      final cleanHost = hostname.endsWith('.') ? hostname.substring(0, hostname.length - 1) : hostname;
+      final addresses = await InternetAddress.lookup(cleanHost);
 
       for (var addr in addresses) {
         if (addr.type == InternetAddressType.IPv4) {
@@ -507,13 +539,27 @@ class DualModeService extends ChangeNotifier {
           return addr.address;
         }
       }
-      if (kDebugMode) print('IPv4 не найден для $hostname, пропускаем');
-      return null;
+    } catch (_) {}
 
-    } catch (e) {
-      if (kDebugMode) print('Ошибка разрешения $hostname: $e');
-      return null;
+    // 2. Если не удалось и имя содержит .local, пробуем без .local
+    if (hostname.contains('.local')) {
+      try {
+        final cleanHostname = hostname.replaceAll('.local.', '').replaceAll('.local', '');
+        final addresses = await InternetAddress.lookup(cleanHostname);
+
+        for (var addr in addresses) {
+          if (addr.type == InternetAddressType.IPv4) {
+            if (kDebugMode) print('Разрешено без .local (IPv4): ${addr.address}');
+            return addr.address;
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) print('Ошибка разрешения $hostname: $e');
+      }
     }
+
+    if (kDebugMode) print('IPv4 не найден для $hostname, пропускаем');
+    return null;
   }
 
   // Получение списка файлов с пира
@@ -685,19 +731,61 @@ class DualModeService extends ChangeNotifier {
 
   // Вспомогательные методы
   Future<String?> _getLocalIp() async {
+    // 1. На мобильных платформах получаем честный Wi-Fi IP через NetworkInfo
+    if (Platform.isAndroid || Platform.isIOS) {
+      try {
+        final info = NetworkInfo();
+        final wifiIp = await info.getWifiIP();
+        if (wifiIp != null && wifiIp.isNotEmpty && wifiIp != '0.0.0.0') {
+          if (kDebugMode) print('Найден Wi-Fi IP через NetworkInfo: $wifiIp');
+          return wifiIp;
+        }
+      } catch (e) {
+        if (kDebugMode) print('Ошибка получения Wi-Fi IP: $e');
+      }
+    }
+
     try {
-      // Получаем список всех сетевых интерфейсов, исключая loopback (127.0.0.1)
+      // 2. Иначе перебираем сетевые интерфейсы
       final interfaces = await NetworkInterface.list(
         includeLoopback: false,
         includeLinkLocal: false,
       );
 
+      // Фильтр виртуальных и VPN-адаптеров
+      bool isVirtual(String name) {
+        final lower = name.toLowerCase();
+        return lower.contains('virtual') ||
+            lower.contains('vmware') ||
+            lower.contains('vbox') ||
+            lower.contains('wsl') ||
+            lower.contains('docker') ||
+            lower.contains('tailscale') ||
+            lower.contains('hamachi') ||
+            lower.contains('tap') ||
+            lower.contains('tun');
+      }
+
+      // Сначала ищем среди реальных физических интерфейсов (Wi-Fi / Ethernet)
+      for (var interface in interfaces) {
+        if (isVirtual(interface.name)) continue;
+        for (var addr in interface.addresses) {
+          if (addr.type == InternetAddressType.IPv4 &&
+              !addr.address.startsWith('127.') &&
+              !addr.address.startsWith('169.254.')) {
+            if (kDebugMode) print('Найден IP через NetworkInterface (${interface.name}): ${addr.address}');
+            return addr.address;
+          }
+        }
+      }
+
+      // Fallback: любой доступный IPv4
       for (var interface in interfaces) {
         for (var addr in interface.addresses) {
-          // Ищем первый попавшийся IPv4 адрес, который не является внутренним
           if (addr.type == InternetAddressType.IPv4 &&
-              addr.address != '127.0.0.1') {
-            print('Найден IP через NetworkInterface: ${addr.address}');
+              !addr.address.startsWith('127.') &&
+              !addr.address.startsWith('169.254.')) {
+            if (kDebugMode) print('Fallback IP (${interface.name}): ${addr.address}');
             return addr.address;
           }
         }
@@ -754,7 +842,7 @@ class DualModeService extends ChangeNotifier {
 
     if (_isServerRunning && _myDeviceName != null){
       await _mdns.unregisterService();
-      await _mdns.registerService(_myDeviceName!,8080, networkPassword: _networkPassword);
+      await _mdns.registerService(_myDeviceName!, 8080, ip: _currentIp, networkPassword: _networkPassword);
     }
     await _mdns.stopDiscovery();
     await _mdns.startDiscovery();
@@ -776,17 +864,28 @@ class DualModeService extends ChangeNotifier {
     _networkPassword = ConfigService.netPass;
   }
 
-  String? _getPasswordFromService(nsd.Service sercive){
-    final passwordBytes = sercive.txt?['password'];
-    if (passwordBytes != null){
-      try{
+  String? _getPasswordFromService(nsd.Service service) {
+    final passwordBytes = service.txt?['password'];
+    if (passwordBytes != null) {
+      try {
         return utf8.decode(passwordBytes);
-      } catch (e){
+      } catch (e) {
         return null;
       }
-      return null;
     }
+    return null;
+  }
 
+  String? _getIpFromService(nsd.Service service) {
+    final ipBytes = service.txt?['ip'];
+    if (ipBytes != null) {
+      try {
+        return utf8.decode(ipBytes);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
   }
 }
 
