@@ -1,327 +1,102 @@
 import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:network_info_plus/network_info_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../services/ConfigService.dart';
-import 'mdnsService.dart';
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:nsd/nsd.dart' as nsd;
 
+import '../models/peer_device.dart';
+import '../models/shared_file.dart';
+import '../models/peer_file.dart';
+export '../models/peer_device.dart';
+export '../models/shared_file.dart';
+export '../models/peer_file.dart';
+
+import 'ConfigService.dart';
+import 'mdnsService.dart';
+import 'network_utils.dart';
+import 'peer_discovery_service.dart';
+import 'file_server_service.dart';
+import 'file_client_service.dart';
+import 'permission_service.dart';
+
+/// Главный координатор (Фасад) для UI-слоя.
+/// Объединяет обнаружение пиров, раздачу и скачивание файлов.
 class DualModeService extends ChangeNotifier {
-  // Компоненты
-  final MdnsService _mdns = MdnsService();
-  HttpServer? _httpServer;
-  String? _currentIp;
-  String? _myDeviceName;
-  String? _networkPassword;
-
-  // Состояние
-  bool _isServerRunning = false;
-  bool _isClientMode = false;
-  final List<PeerDevice> _peers = [];
-  final List<SharedFile> _mySharedFiles = [];
-  final List<PeerFile> _peerFiles = [];
-  int _updateCounter = 0;
   static const String _filesPath = "/BjhbfjKWkjn1217y8Fbkbhwkjijf";
   static const String _downloadPath = "/WEJKFHLwiehffao29u4819fjnsj/download";
+  static const int _serverPort = 8080;
 
-  // Геттеры
+  // Модули сервиса
+  final PeerDiscoveryService _discovery = PeerDiscoveryService();
+  final FileClientService _client = FileClientService();
+  late final FileServerService _server;
+
+  // Локальное состояние
+  final List<SharedFile> _mySharedFiles = [];
+  String? _currentIp;
+  String? _myDeviceName;
+  int _updateCounter = 0;
+
+  // Геттеры для UI
   int get updateCounter => _updateCounter;
-  bool get isServerRunning => _isServerRunning;
-  bool get isClientMode => _isClientMode;
-  List<PeerDevice> get peers => _peers;
+  bool get isServerRunning => _server.isRunning;
+  bool get isClientMode => false;
+  List<PeerDevice> get peers => _discovery.peers;
   List<SharedFile> get mySharedFiles => _mySharedFiles;
-  List<PeerFile> get peerFiles => _peerFiles;
-  MdnsService get mdns => _mdns;
-  String? get networkPassword => _networkPassword;
+  MdnsService get mdns => _discovery.mdns;
+  String? get networkPassword => _discovery.networkPassword;
   String get filesPath => _filesPath;
   String get downloadPath => _downloadPath;
 
-  // Запрос разрешения на storage
-  Future<bool> requestStoragePermission() async {
-    if (Platform.isAndroid) {
-      final status = await Permission.storage.request();
-      return status.isGranted;
-    }
-    // Для других платформ разрешения не нужны
-    return true;
+  DualModeService() {
+    _server = FileServerService(
+      filesPath: _filesPath,
+      downloadPath: _downloadPath,
+      getSharedFiles: () => _mySharedFiles,
+      onNotifyReceived: _onFilesUpdatedByPeer,
+    );
+    _discovery.addListener(_onDiscoveryChanged);
   }
 
-  // Проверка статуса разрешения
-  Future<PermissionStatus> checkStoragePermission() async {
-    return await Permission.storage.status;
-  }
-
-  // Открыть настройки приложения (если разрешение отклонено навсегда)
-  Future<void> openSettings() async {
-    await openAppSettings();
-  }
-  // Проверка и запрос всех необходимых разрешений при старте
-  Future<bool> ensurePermissions() async {
-    if (Platform.isAndroid) {
-      // Получаем версию Android
-      final deviceInfo = await DeviceInfoPlugin().androidInfo;
-      final sdkInt = deviceInfo.version.sdkInt;
-
-      if (sdkInt >= 33) {
-        // Андроид 13+
-        final images = await Permission.photos.request();
-        final videos = await Permission.videos.request();
-        final audio = await Permission.audio.request();
-        final storage = await Permission.manageExternalStorage.request();
-
-        final allGranted = images.isGranted && videos.isGranted && audio.isGranted && storage.isGranted;
-
-        if (allGranted) {
-          if (kDebugMode) print('Разрешения для медиа получены андроид 13+');
-          return true;
-        } else {
-          // Если какое-то разрешение отклонено навсегда
-          if (images.isPermanentlyDenied || videos.isPermanentlyDenied || audio.isPermanentlyDenied) {
-            if (kDebugMode) print('Разрешения отклонены навсегда');
-            await openAppSettings();
-          }
-          return false;
-        }
-
-      } else if (sdkInt >= 30) {
-        // Андроид 11-12
-        final status = await Permission.manageExternalStorage.request();
-
-        if (status.isGranted) {
-          if (kDebugMode) print('Разрешение manageExternalStorage получено (Android 11-12)');
-          return true;
-        } else if (status.isPermanentlyDenied) {
-          if (kDebugMode) print('Разрешение отклонено навсегда, открываем настройки');
-          await openAppSettings();
-          return false;
-        }
-        return false;
-
-      } else {
-        // андроид 10
-        final status = await Permission.storage.request();
-
-        if (status.isGranted) {
-          if (kDebugMode) print('Разрешение storage получено (Android 10-)');
-          return true;
-        } else if (status.isPermanentlyDenied) {
-          if (kDebugMode) print('Разрешение отклонено навсегда, открываем настройки');
-          await openAppSettings();
-          return false;
-        }
-        return false;
-      }
-    }
-    return true;
-  }
-  // Инициализация
+  // --- Инициализация ---
   Future<void> initialize() async {
     await _loadNetworkPassword();
-    final hasPermission = await ensurePermissions();
-    if (!hasPermission) {
-      if (kDebugMode) {
-        print('Нет разрешений, работа сервиса ограничена');
-      }
-    }
+    await PermissionService.ensurePermissions();
 
-    // Запускаем HTTP сервер (чтобы нас могли видеть)
-    await _startServer();
+    _currentIp = await NetworkUtils.getLocalIp();
+    _myDeviceName = await NetworkUtils.getDeviceName();
 
-    // Запускаем mDNS поиск (чтобы видеть других)
-    await _mdns.startDiscovery();
+    _discovery.setSelfInfo(
+      deviceName: _myDeviceName!,
+      currentIp: _currentIp,
+      networkPassword: _discovery.networkPassword,
+    );
 
-    // Подписываемся на события mDNS
-    _mdns.addListener(_onMdnsChanged);
+    // Запускаем локальный HTTP-сервер
+    await _server.start(_serverPort);
 
-    if (kDebugMode) {
-      print('DualModeService инициализирован');
-      print('   - Сервер: ${_isServerRunning ? "запущен" : "остановлен"}');
-      print('   - Поиск: ${_mdns.isDiscovering ? "активен" : "неактивен"}');
-      print('   - Пароль сети: ${networkPassword != null ? "установлен" : "не установлен"}');
-    }
+    // Регистрируем mDNS и начинаем поиск пиров
+    await _discovery.registerSelf(
+      deviceName: _myDeviceName!,
+      port: _serverPort,
+      ip: _currentIp,
+      networkPassword: _discovery.networkPassword,
+    );
+    await _discovery.startDiscovery();
+
+    notifyListeners();
   }
 
-  // Запуск HTTP сервера
-  Future<void> _startServer() async {
-    try {
-      _httpServer = await HttpServer.bind(InternetAddress.anyIPv4, 8080);
-      _isServerRunning = true;
+  // --- Разрешения (делегирование в PermissionService) ---
+  Future<bool> requestStoragePermission() => PermissionService.requestStoragePermission();
+  Future<PermissionStatus> checkStoragePermission() => PermissionService.checkStoragePermission();
+  Future<void> openSettings() => PermissionService.openSettings();
+  Future<bool> ensurePermissions() => PermissionService.ensurePermissions();
 
-      _currentIp = await _getLocalIp();
-      _myDeviceName = await _getDeviceName();
-
-      // Регистрируем mDNS сервис
-      await _mdns.registerService(_myDeviceName!, 8080, ip: _currentIp, networkPassword: _networkPassword);
-
-      // Обрабатываем входящие запросы
-      _handleIncomingRequests();
-
-      notifyListeners();
-
-      if (kDebugMode) {
-        final ip = await _getLocalIp();
-        print('HTTP Сервер запущен на $ip:8080');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка запуска сервера: $e');
-      }
-    }
-  }
-
-  // Обработка входящих HTTP запросов
-  void _handleIncomingRequests() {
-    _httpServer?.listen((HttpRequest request) async {
-      final path = request.uri.path;
-      // GET /api/files - список файлов
-      if (path == _filesPath) {
-        final response = _generateFileListJson();
-        request.response
-          ..statusCode = 200
-          ..headers.contentType = ContentType.json
-          ..write(response)
-          ..close();
-        return;
-      }
-
-      // GET /download/{filename} - скачивание файла
-      if (path.startsWith(_downloadPath)) {
-        final filename = path.substring(_downloadPath.length + 1);
-        await _handleDownloadRequest(request, filename);
-        return;
-      }
-
-      // POST /api/notify - уведомление об обновлении файлов
-      if (request.uri.path == '/api/notify' && request.method == 'POST') {
-        final body = await utf8.decoder.bind(request).join();
-        final data = jsonDecode(body);
-        final senderName = data['deviceName'] ?? 'Unknown';
-
-        if (kDebugMode) {
-          print('Получено уведомление об обновлении от $senderName');
-        }
-
-        // Уведомляем UI (вызовет обновление у всех слушателей)
-        _updateCounter++;
-        notifyListeners();
-
-        request.response
-          ..statusCode = 200
-          ..write('OK')
-          ..close();
-        return;
-      }
-
-      // 404
-      request.response
-        ..statusCode = 404
-        ..write('Not Found')
-        ..close();
-    });
-  }
-
-  // Генерация списка файлов в JSON
-  String _generateFileListJson() {
-    final files = _mySharedFiles.map((f) => {
-      'name': f.name,
-      'size': f.size,
-      'sizeFormatted': _formatSize(f.size),
-    }).toList();
-
-    return jsonEncode({
-      'deviceName': _mdns.isRegistered ? 'Моё устройство' : 'Unknown',
-      'files': files,
-    });
-  }
-
-  // Обработка запроса на скачивание
-  Future<void> _handleDownloadRequest(HttpRequest request, String encodeFilename) async {
-    try {
-      final filename = Uri.decodeComponent(encodeFilename);
-      // Ищем файл в списке общих файлов
-      final fileInfo = _mySharedFiles.firstWhere(
-            (f) => f.name == filename,
-        orElse: () => throw Exception('File not found'),
-      );
-
-      final file = File(fileInfo.path);
-
-      //Проверяем существование файла
-      if (!await file.exists()) {
-        if (kDebugMode) {
-          print('Файл не найден: ${fileInfo.path}');
-        }
-        request.response
-          ..statusCode = 404
-          ..write('File not found')
-          ..close();
-        return;
-      }
-
-      //Получаем размер файла
-      final fileSize = await file.length();
-
-      // Кодируем имя файла для HTTP заголовка (поддержка кириллицы)
-      final encodedFilename = Uri.encodeComponent(filename);
-
-      // Настраиваем заголовки ответа
-      request.response
-        ..statusCode = 200
-        ..headers.contentType = ContentType.binary
-        ..headers.add('Content-Disposition', 'attachment; filename*=UTF-8\'\'$encodedFilename')
-        ..headers.add('Content-Length', fileSize.toString());
-
-      // Отправляем файл стримом
-      final stream = file.openRead();
-      await request.response.addStream(stream);
-      await request.response.close();
-
-      if (kDebugMode) {
-        print('Файл отправлен: $filename (${_formatSize(fileSize)})');
-        //print("Местоположение отправленного файла : ${file.path}");
-        // здес удалять этот файл из кеша файл пикера на андроиде
-
-      }
-
-      if (Platform.isAndroid) {
-        print('Файл удален из кэша: ${file.path}');
-
-        await file.delete();
-      }
-      removeSharedFile(filename, notifyPeers: false);
-
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка отправки файла $encodeFilename: $e');
-      }
-
-      try {
-        request.response
-          ..statusCode = 500
-          ..write('Internal Server Error')
-          ..close();
-      } catch (_) {}
-    }
-  }
-
-  // Добавление файлов для шаринга
+  // --- Работа с файлами раздачи ---
   void addSharedFiles(List<String> paths) async {
-
-    //  Удаление файла из шаринга
     for (var path in paths) {
       try {
         final sourceFile = File(path);
-        if (!await sourceFile.exists()) {
-          if (kDebugMode) {
-            print('Файл не существует: $path');
-          }
-          continue;
-        }
-
+        if (!await sourceFile.exists()) continue;
 
         String fileName = path;
         if (path.contains('/')) {
@@ -330,602 +105,129 @@ class DualModeService extends ChangeNotifier {
           fileName = path.split('\\').last;
         }
 
+        if (!_mySharedFiles.any((f) => f.path == path)) {
+          final fileLength = await sourceFile.length();
+          final fileId = '${DateTime.now().microsecondsSinceEpoch}_${fileLength}_${path.hashCode.abs()}';
 
-        if (!_mySharedFiles.any((f) => f.name == fileName)) {
           _mySharedFiles.add(SharedFile(
+            id: fileId,
             name: fileName,
-            path: path,  // оригинальный путь
-            size: await sourceFile.length(),
+            path: path,
+            size: fileLength,
           ));
 
           if (kDebugMode) {
-            print('Файл добавлен в общий доступ: $fileName');
+            print('Файл добавлен в общий доступ: $fileName (id: $fileId)');
           }
         }
       } catch (e) {
-        if (kDebugMode) {
-          print('Ошибка обработки файла $path: $e');
-        }
+        if (kDebugMode) print('Ошибка обработки файла $path: $e');
       }
     }
 
     notifyListeners();
-
-    // Оповещаем всех пиров об обновлении
     _notifyPeersAboutUpdate();
-
-    if (kDebugMode) {
-      print('Файлы добавлены, уведомления отправлены');
-    }
-
-    if (kDebugMode) {
-      print('Всего общих файлов: ${_mySharedFiles.length}');
-      for (var f in _mySharedFiles) {
-        print('   - ${f.name} (${f.path})');
-      }
-    }
   }
 
-  void removeSharedFile(String name, {bool notifyPeers = false}) {
-    _mySharedFiles.removeWhere((f) => f.name == name);
+  void removeSharedFile(String idOrName, {bool notifyPeers = false}) {
+    _mySharedFiles.removeWhere((f) => f.id == idOrName || f.name == idOrName);
     notifyListeners();
-    // Оповещаем всех пиров об обновлении
     if (notifyPeers) {
       _notifyPeersAboutUpdate();
     }
   }
 
-  // Обработка изменений mDNS
-  Future<void> _onMdnsChanged() async {
-    await _updatePeersFromMdns();
+  // --- Клиентские операции ---
+  Future<List<PeerFile>> fetchPeerFiles(PeerDevice peer) {
+    return _client.fetchPeerFiles(
+      peer,
+      _filesPath,
+      onPeerFailed: (p) => _discovery.removePeer(p),
+    );
   }
 
-  // Уведомление всех пиров о добавлении новых файлов
-  Future<void> _notifyPeersAboutUpdate() async {
-    // Пропускаем, если мы не в режиме сервера или нет пиров
-    if (!_isServerRunning || _peers.isEmpty) return;
-
-    final myName = _myDeviceName ?? 'Unknown';
-    final notificationData = jsonEncode({
-      'deviceName': myName,
-      'timestamp': DateTime.now().toIso8601String(),
-    });
-
-    // Отправляем уведомление каждому пиру
-    for (var peer in _peers) {
-      try {
-        final url = Uri.parse('http://${peer.host}:${peer.port}/api/notify');
-        final response = await http.post(
-          url,
-          headers: {'Content-Type': 'application/json'},
-          body: notificationData,
-        ).timeout(const Duration(seconds: 5));
-
-        if (response.statusCode == 200) {
-          if (kDebugMode) {
-            print('Уведомление отправлено на ${peer.name}');
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          print('Не удалось уведомить ${peer.name}: $e');
-        }
-      }
-    }
+  Future<bool> downloadFile(PeerDevice peer, PeerFile file, Function(double) onProgress) {
+    return _client.downloadFile(
+      peer,
+      file,
+      _downloadPath,
+      onProgress,
+      onPeerFailed: (p) => _discovery.removePeer(p),
+      onStateChanged: notifyListeners,
+    );
   }
 
-  Future<void> refreshMdns() async {
-    await mdns.stopDiscovery();
-    await mdns.startDiscovery();
-    await _updatePeersFromMdns();
-  }
+  bool isFileDownloading(String fileId) => _client.isFileDownloading(fileId);
+  ValueNotifier<double> getProgressNotifier(String fileId) => _client.getProgressNotifier(fileId);
 
-  // Обновление списка пиров
-  Future<void> _updatePeersFromMdns() async {
-    final servicesCopy = _mdns.services.toList();
-    _peers.clear();
+  // --- Сеть и пиры ---
+  Future<void> refreshMdns() => _discovery.refreshDiscovery();
 
-    for (var service in servicesCopy) {
-      final serviceName = service.name ?? '';
-      final serviceHost = service.host ?? '';
-
-      // Пропускаем своё устройство
-      if (_myDeviceName != null && serviceName == _myDeviceName) {
-        if (kDebugMode) print('Пропускаем своё устройство: $serviceName');
-        continue;
-      }
-      final servicePassword = _getPasswordFromService(service);
-
-      if (_networkPassword != null && _networkPassword!.isNotEmpty){
-        if (servicePassword != _networkPassword){
-          if (kDebugMode) {print("Пропускаем устройство ${serviceName}, пароль не совпадает");}
-          continue;
-        }
-      }
-      else if (servicePassword != null && servicePassword.isNotEmpty){
-        if (kDebugMode){print("Пропускаем устройсттво ${serviceName}, защищено паролем");}
-        continue;
-      }
-
-      // Определяем IP адрес пира (TXT-запись -> addresses -> host -> DNS lookup)
-      String? resolvedIp;
-
-      // 1. IP из mDNS TXT-записи (наиболее надежный способ в LAN/Wi-Fi)
-      final txtIp = _getIpFromService(service);
-      if (txtIp != null && txtIp.isNotEmpty) {
-        resolvedIp = txtIp;
-        if (kDebugMode) print('IP получен из TXT-записи $serviceName: $resolvedIp');
-      }
-
-      // 2. IP из разрешенных адресов nsd, если плагин их заполнил
-      if (resolvedIp == null && service.addresses != null) {
-        for (var addr in service.addresses!) {
-          if (addr.type == InternetAddressType.IPv4) {
-            resolvedIp = addr.address;
-            if (kDebugMode) print('IP получен из service.addresses: $resolvedIp');
-            break;
-          }
-        }
-      }
-
-      // 3. Если serviceHost уже является корректным IPv4
-      if (resolvedIp == null) {
-        final parsed = InternetAddress.tryParse(serviceHost);
-        if (parsed != null && parsed.type == InternetAddressType.IPv4) {
-          resolvedIp = parsed.address;
-        }
-      }
-
-      // 4. Если имя оканчивается на .local или это хостнейм — пробуем отрезолвить
-      if (resolvedIp == null) {
-        if (serviceHost.contains(':') || serviceHost.contains('%')) {
-          if (kDebugMode) print('Пропускаем IPv6 адрес: $serviceHost');
-          continue;
-        }
-
-        if (kDebugMode) print('Разрешаем имя: $serviceHost');
-        resolvedIp = await _resolveLocalHostname(serviceHost);
-      }
-
-      if (resolvedIp == null) {
-        if (kDebugMode) print('Не удалось разрешить $serviceHost, пропускаем');
-        continue;
-      }
-
-      // Пропускаем, если IP совпадает с собственным (защита от добавления себя)
-      if (_currentIp != null && resolvedIp == _currentIp) {
-        if (kDebugMode) print('Пропускаем свой собственный IP: $resolvedIp');
-        continue;
-      }
-
-      if (kDebugMode) print('Добавляем устройство: $serviceName → $resolvedIp:${service.port}');
-      final exist = _peers.any((peer) => peer.id == service.name || (peer.host == resolvedIp && peer.port == (service.port ?? 8080)));
-
-      if (!exist){
-        _peers.add(PeerDevice(
-          id: service.name ?? 'unknown',
-          name: service.name ?? 'Unknown',
-          host: resolvedIp,
-          port: service.port ?? 8080,
-          lastSeen: DateTime.now(),
-        ));
-        if (kDebugMode ) {print("Устройсво добавлено");}
-
-      } else{
-        if (kDebugMode) print("Устроство уже есть в списке, пропускаем");
-      }
-
-    }
-
-    notifyListeners();
-
-    if (kDebugMode) {
-      print('Обновлён список пиров: ${_peers.length} устройств');
-      for (var p in _peers) {
-        print('   - ${p.name} (${p.host}:${p.port})');
-      }
-    }
-  }
-
-  Future<String?> _resolveLocalHostname(String hostname) async {
-    // 1. Сначала пробуем как есть (с .local)
-    try {
-      final cleanHost = hostname.endsWith('.') ? hostname.substring(0, hostname.length - 1) : hostname;
-      final addresses = await InternetAddress.lookup(cleanHost);
-
-      for (var addr in addresses) {
-        if (addr.type == InternetAddressType.IPv4) {
-          if (kDebugMode) print('Разрешено (IPv4): ${addr.address}');
-          return addr.address;
-        }
-      }
-    } catch (_) {}
-
-    // 2. Если не удалось и имя содержит .local, пробуем без .local
-    if (hostname.contains('.local')) {
-      try {
-        final cleanHostname = hostname.replaceAll('.local.', '').replaceAll('.local', '');
-        final addresses = await InternetAddress.lookup(cleanHostname);
-
-        for (var addr in addresses) {
-          if (addr.type == InternetAddressType.IPv4) {
-            if (kDebugMode) print('Разрешено без .local (IPv4): ${addr.address}');
-            return addr.address;
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) print('Ошибка разрешения $hostname: $e');
-      }
-    }
-
-    if (kDebugMode) print('IPv4 не найден для $hostname, пропускаем');
-    return null;
-  }
-
-  // Получение списка файлов с пира
-  Future<List<PeerFile>> fetchPeerFiles(PeerDevice peer) async {
-    try {
-
-      final url = Uri.http('${peer.host}:${peer.port}', _filesPath);
-      print('Запрос к $url');
-      final response = await http.get(url);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final files = (data['files'] as List).map((f) => PeerFile(
-          name: f['name'],
-          size: f['size'],
-          sizeFormatted: f['sizeFormatted'],
-          peerId: peer.id,
-          peerName: peer.name,
-        )).toList();
-
-        if (kDebugMode) {
-          print('Получено ${files.length} файлов от ${peer.name}');
-        }
-
-        return files;
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Ошибка получения файлов от ${peer.name}: $e');
-      }
-    }
-
-    return [];
-  }
-
-  // Скачивание файла с пира
-  Future<bool> downloadFile(PeerDevice peer, PeerFile file, Function(double) onProgress) async {
-    try {
-      final hostPort = _formatHostForUrl(peer.host, peer.port);
-      final url = Uri.http('${peer.host}:${peer.port}', '$_downloadPath/${file.name}');
-      final request = http.Request('GET', url);
-      final response = await request.send();
-
-      if (response.statusCode != 200) {
-        print('Ошибка HTTP: ${response.statusCode}');
-        return false;
-      }
-
-      // Получаем папку для скачиваний
-      final downloadDir = await _getDownloadDirectory();
-      print('Папка для сохранения: ${downloadDir.path}');
-
-      // Проверяем доступность папки
-      if (!await downloadDir.exists()) {
-        try {
-          await downloadDir.create(recursive: true);
-          print('Папка создана: ${downloadDir.path}');
-        } catch (e) {
-          print('Не удалось создать папку: $e');
-          return false;
-        }
-      }
-
-      // Проверяем, можно ли писать в папку
-      final testFile = File('${downloadDir.path}/.test');
-      try {
-        await testFile.writeAsString('test');
-        await testFile.delete();
-        print('Папка доступна для записи');
-      } catch (e) {
-        print('Нет прав на запись в папку: $e');
-        return false;
-      }
-
-      final filePath = '${downloadDir.path}/${file.name}';
-      final outputFile = File(filePath);
-
-      // Если файл уже существует, добавляем суффикс
-      String finalPath = filePath;
-      int counter = 1;
-      while (await File(finalPath).exists()) {
-        final extension = file.name.contains('.')
-            ? '.${file.name.split('.').last}'
-            : '';
-        final nameWithoutExt = file.name.split('.').first;
-        finalPath = '${downloadDir.path}/${nameWithoutExt}_$counter$extension';
-        counter++;
-      }
-
-      downloadingStates[file.name] = true;
-      notifyListeners(); // Уведомляем систему
-
-
-      print('Сохраняем в: $finalPath');
-      final outputFileFinal = File(finalPath);
-      final sink = outputFileFinal.openWrite();
-
-      int bytesReceived = 0;
-      final contentLength = response.contentLength ?? file.size;
-
-      int lastUpdateTime = 0;
-
-      await for (var chunk in response.stream) {
-        sink.add(chunk);
-        bytesReceived += chunk.length;
-
-        final currentTime = DateTime.now().millisecondsSinceEpoch;
-        if (currentTime - lastUpdateTime > 100 || bytesReceived == contentLength) {
-          //getProgressNotifier(file.name).value = bytesReceived / contentLength
-          onProgress(bytesReceived / contentLength);
-          lastUpdateTime = currentTime;
-
-        }
-      }
-
-      await sink.close();
-      downloadingStates[file.name] = false;
-      notifyListeners();
-
-      // Проверяем, что файл действительно создался
-      if (await outputFileFinal.exists()) {
-        final fileSize = await outputFileFinal.length();
-        print('Скачан файл: ${file.name} (${_formatSize(fileSize)}) в ${downloadDir.path}');
-        return true;
-      } else {
-        print('Файл не был создан после записи');
-        return false;
-      }
-    } catch (e) {
-      print('Ошибка скачивания: $e');
-      return false;
-    }
-  }
-  // Определение папки для скачиваний в зависимости от платформы
-  Future<Directory> _getDownloadDirectory() async {
-    if (Platform.isWindows) {
-      final userProfile = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Default';
-      return Directory('$userProfile\\Downloads\\GrushaSync');
-    } else if (Platform.isMacOS) {
-      final home = Platform.environment['HOME'] ?? '/Users/default';
-      return Directory('$home/Downloads/GrushaSync');
-    } else if (Platform.isLinux) {
-      final home = Platform.environment['HOME'] ?? '/home/default';
-      return Directory('$home/Downloads/GrushaSync');
-    } else {
-      final downloadsPath = '/storage/emulated/0/Download';
-      final grushaDir = Directory('$downloadsPath/GrushaSync');
-
-      // Пытаемся создать папку, если не получится — используем просто Download
-      try {
-        if (!await grushaDir.exists()) {
-          await grushaDir.create(recursive: true);
-        }
-        return grushaDir;
-      } catch (e) {
-        print('Не удалось создать папку GrushaSync: $e');
-        return Directory(downloadsPath);
-      }
-    }
-  }
-  // Остановка сервиса
-  @override
-  void dispose()  {
-    _mdns.unregisterService();
-    _mdns.stopDiscovery();
-    _httpServer?.close();
-    super.dispose();
-  }
-
-  // Вспомогательные методы
-  Future<String?> _getLocalIp() async {
-    // 1. На мобильных платформах получаем честный Wi-Fi IP через NetworkInfo
-    if (Platform.isAndroid || Platform.isIOS) {
-      try {
-        final info = NetworkInfo();
-        final wifiIp = await info.getWifiIP();
-        if (wifiIp != null && wifiIp.isNotEmpty && wifiIp != '0.0.0.0') {
-          if (kDebugMode) print('Найден Wi-Fi IP через NetworkInfo: $wifiIp');
-          return wifiIp;
-        }
-      } catch (e) {
-        if (kDebugMode) print('Ошибка получения Wi-Fi IP: $e');
-      }
-    }
-
-    try {
-      // 2. Иначе перебираем сетевые интерфейсы
-      final interfaces = await NetworkInterface.list(
-        includeLoopback: false,
-        includeLinkLocal: false,
-      );
-
-      // Фильтр виртуальных и VPN-адаптеров
-      bool isVirtual(String name) {
-        final lower = name.toLowerCase();
-        return lower.contains('virtual') ||
-            lower.contains('vmware') ||
-            lower.contains('vbox') ||
-            lower.contains('wsl') ||
-            lower.contains('docker') ||
-            lower.contains('tailscale') ||
-            lower.contains('hamachi') ||
-            lower.contains('tap') ||
-            lower.contains('tun');
-      }
-
-      // Сначала ищем среди реальных физических интерфейсов (Wi-Fi / Ethernet)
-      for (var interface in interfaces) {
-        if (isVirtual(interface.name)) continue;
-        for (var addr in interface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 &&
-              !addr.address.startsWith('127.') &&
-              !addr.address.startsWith('169.254.')) {
-            if (kDebugMode) print('Найден IP через NetworkInterface (${interface.name}): ${addr.address}');
-            return addr.address;
-          }
-        }
-      }
-
-      // Fallback: любой доступный IPv4
-      for (var interface in interfaces) {
-        for (var addr in interface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 &&
-              !addr.address.startsWith('127.') &&
-              !addr.address.startsWith('169.254.')) {
-            if (kDebugMode) print('Fallback IP (${interface.name}): ${addr.address}');
-            return addr.address;
-          }
-        }
-      }
-    } catch (e) {
-      print('Ошибка NetworkInterface: $e');
-    }
-    return null;
-  }
-
-  Future<String> _getDeviceName() async {
-    String deviceModel = await _getReadableModel();
-    final ip = await _getLocalIp();
-    final suffix = ip?.split(".").last ?? "unknown";
-    return '$deviceModel-$suffix';
-  }
-
-  Future<String> _getReadableModel() async {
-    if (Platform.isAndroid) {
-      final androidInfo = await DeviceInfoPlugin().androidInfo;
-      return androidInfo.model.isNotEmpty ? androidInfo.model : 'Android';
-    }
-    else if (Platform.isWindows) return Platform.localHostname.split(".").first;
-    return "Device";
-
-  }
-  String _formatHostForUrl(String host, int port) {
-
-    if (host.contains(':') && !host.contains('.')) {
-      return '[$host]:$port';
-    }
-    return '$host:$port';
-  }
-  String _formatSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
+  void removePeer(PeerDevice peer) => _discovery.removePeer(peer);
 
   Future<String> getCachedDeviceName() async {
-    if (_myDeviceName != null) {
-      return _myDeviceName!;
-    }
-    final name = await _getDeviceName();
+    if (_myDeviceName != null) return _myDeviceName!;
+    final name = await NetworkUtils.getDeviceName();
     _myDeviceName = name;
     return name;
   }
 
   Future<void> setNetworkPassword(String? password) async {
-    _networkPassword = (password != null && password.isNotEmpty) ? password : null;
-
-    if (_networkPassword != null) await ConfigService.setNetPass(_networkPassword!);
-    else await ConfigService.removePass();
-
-    if (_isServerRunning && _myDeviceName != null){
-      await _mdns.unregisterService();
-      await _mdns.registerService(_myDeviceName!, 8080, ip: _currentIp, networkPassword: _networkPassword);
+    final cleanPass = (password != null && password.isNotEmpty) ? password : null;
+    if (cleanPass != null) {
+      await ConfigService.setNetPass(cleanPass);
+    } else {
+      await ConfigService.removePass();
     }
-    await _mdns.stopDiscovery();
-    await _mdns.startDiscovery();
+
+    if (_server.isRunning && _myDeviceName != null) {
+      await _discovery.registerSelf(
+        deviceName: _myDeviceName!,
+        port: _serverPort,
+        ip: _currentIp,
+        networkPassword: cleanPass,
+      );
+    }
+    await _discovery.refreshDiscovery();
     notifyListeners();
   }
 
-  // Прогресс для каждого скачиваемого файла
-  final Map<String, ValueNotifier<double>> downloadProgresses = {};
-  // Качается ли файл прямо сейчас
-  final Map<String, bool> downloadingStates = {};
+  // --- Вспомогательные внутренние методы ---
+  void _onFilesUpdatedByPeer() {
+    _updateCounter++;
+    notifyListeners();
+  }
 
-  bool isFileDownloading(String fileName) => downloadingStates[fileName] ?? false;
+  void _onDiscoveryChanged() {
+    notifyListeners();
+  }
 
-  ValueNotifier<double> getProgressNotifier(String fileName) {
-    return downloadProgresses.putIfAbsent(fileName, () => ValueNotifier<double>(0.0));
+  Future<void> _notifyPeersAboutUpdate() async {
+    if (!_server.isRunning || _discovery.peers.isEmpty) return;
+    final myName = _myDeviceName ?? 'Unknown';
+    await _client.notifyPeers(
+      _discovery.peers,
+      myName,
+      onPeerFailed: (p) => _discovery.removePeer(p),
+    );
   }
 
   Future<void> _loadNetworkPassword() async {
-    _networkPassword = ConfigService.netPass;
-  }
-
-  String? _getPasswordFromService(nsd.Service service) {
-    final passwordBytes = service.txt?['password'];
-    if (passwordBytes != null) {
-      try {
-        return utf8.decode(passwordBytes);
-      } catch (e) {
-        return null;
-      }
+    final pass = ConfigService.netPass;
+    if (pass != null && pass.isNotEmpty) {
+      _discovery.setSelfInfo(
+        deviceName: _myDeviceName ?? 'Device',
+        currentIp: _currentIp,
+        networkPassword: pass,
+      );
     }
-    return null;
   }
 
-  String? _getIpFromService(nsd.Service service) {
-    final ipBytes = service.txt?['ip'];
-    if (ipBytes != null) {
-      try {
-        return utf8.decode(ipBytes);
-      } catch (e) {
-        return null;
-      }
-    }
-    return null;
+  @override
+  void dispose() {
+    _discovery.removeListener(_onDiscoveryChanged);
+    _discovery.dispose();
+    _server.stop();
+    super.dispose();
   }
-}
-
-
-class PeerDevice {
-  final String id;
-  final String name;
-  final String host;
-  final int port;
-  DateTime lastSeen;
-
-  PeerDevice({
-    required this.id,
-    required this.name,
-    required this.host,
-    required this.port,
-    required this.lastSeen,
-  });
-}
-
-class SharedFile {
-  final String name;
-  final String path;
-  final int size;
-
-  SharedFile({required this.name, required this.path, required this.size});
-}
-
-class PeerFile {
-  final String name;
-  final int size;
-  final String sizeFormatted;
-  final String peerId;
-  final String peerName;
-
-  PeerFile({
-    required this.name,
-    required this.size,
-    required this.sizeFormatted,
-    required this.peerId,
-    required this.peerName,
-  });
 }

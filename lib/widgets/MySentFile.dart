@@ -41,9 +41,9 @@ class MySentFileState extends State<MySentFile> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Название файла без расширения
+                // Название файла без расширения (безопасно, без RangeError)
                 Text(
-                  widget.file.name.substring(0, widget.file.name.lastIndexOf('.')),
+                  widget.file.nameWithoutExtension,
                   style: Theme.of(context).textTheme.bodyMedium,
                   textAlign: TextAlign.left,
                   overflow: TextOverflow.ellipsis,
@@ -51,11 +51,14 @@ class MySentFileState extends State<MySentFile> {
                 ),
                 // Доп информация под названием файла
                 Row(children: [
-                  // Расширение файла
-                  Text(
-                    widget.file.name.substring(widget.file.name.lastIndexOf('.')),
-                    style: Theme.of(context).textTheme.bodySmall,),
-                  SizedBox(width: 15, height: 10,),
+                  // Расширение файла (безопасно)
+                  if (widget.file.extension.isNotEmpty) ...[
+                    Text(
+                      widget.file.extension,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(width: 15, height: 10),
+                  ],
                   // Размер файла
                   Text(
                     _formatSize(widget.file.size),
@@ -73,7 +76,7 @@ class MySentFileState extends State<MySentFile> {
                 final service = Provider.of<DualModeService>(context, listen: false);
                 // Тут уведомляются устройства, которым мы расшарили этот файл,
                 // и у них перерисовывается список файлов
-                service.removeSharedFile(widget.file.name, notifyPeers: true);
+                service.removeSharedFile(widget.file.id, notifyPeers: true);
               },
               icon: const Icon(Icons.close, color: Colors.grey)
           ),

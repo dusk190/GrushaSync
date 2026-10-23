@@ -38,9 +38,9 @@ class MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
-  void _removeLocalFile(String fileName) {
+  void _removeLocalFile(String fileId) {
     setState(() {
-      _receivedFiles.removeWhere((f) => f.name == fileName);
+      _receivedFiles.removeWhere((f) => f.id == fileId || f.name == fileId);
     });
   }
 
@@ -158,12 +158,12 @@ class MyFilesPageState extends State<MyFilesPage> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: MyFile(
-                key: ValueKey(file.name),
+                key: ValueKey(file.id),
                 file: file,
                 peer: widget.peer,
                 onDownloaded: () {
-                  _removeLocalFile(file.name);
-            },
+                  _removeLocalFile(file.id);
+                },
               ),
             );
           },
