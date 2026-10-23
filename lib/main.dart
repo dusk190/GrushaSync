@@ -1,6 +1,3 @@
-// Найти build gradle и прописать ьам
-// перед sdk 31
-// namespace 'com.haberey.flutter.nsd_android'
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/dualModeService.dart';
@@ -39,7 +36,7 @@ class MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     // Если юзер менял тему, смотрим в конфиг
     if (ConfigService.isDarkMode != null) {
-      myThemeMode = ConfigService.isDarkMode! ? ThemeMode.dark : ThemeMode.light;;
+      myThemeMode = ConfigService.isDarkMode! ? ThemeMode.dark : ThemeMode.light;
     }
 
     // Темы для текстов
