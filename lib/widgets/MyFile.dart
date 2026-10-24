@@ -26,13 +26,13 @@ class MyFileState extends State<MyFile> {
   // Функция загрузки данного файла с устройства-пира в папку GrushaSync в дефолтной директории загрузок
   Future<void> _downloadFile() async {
     final service = Provider.of<DualModeService>(context, listen: false);
-    final fileName = widget.file.name;
+    final fileKey = widget.file.id;
     try {
       await service.downloadFile(
           widget.peer,
           widget.file,
-              (progress) {
-            service.getProgressNotifier(fileName).value = progress;
+          (progress) {
+            service.getProgressNotifier(fileKey).value = progress;
           }
       );
       widget.onDownloaded?.call();
@@ -41,10 +41,9 @@ class MyFileState extends State<MyFile> {
 
   @override
   Widget build(BuildContext context) {
-    // hi
     final service = Provider.of<DualModeService>(context);
-    final isDownloading = service.isFileDownloading(widget.file.name);
-    final progressNotifier = service.getProgressNotifier(widget.file.name);
+    final isDownloading = service.isFileDownloading(widget.file.id) || service.isFileDownloading(widget.file.name);
+    final progressNotifier = service.getProgressNotifier(widget.file.id);
     return Padding(padding: EdgeInsetsGeometry.symmetric(horizontal: Platform.isWindows ? 16 : 0),
         child: ElevatedButton(
       style: ElevatedButton.styleFrom(
@@ -69,9 +68,9 @@ class MyFileState extends State<MyFile> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Название файла без расширения
+                // Название файла без расширения (безопасно, без RangeError)
                 Text(
-                  widget.file.name.substring(0, widget.file.name.lastIndexOf('.')),
+                  widget.file.nameWithoutExtension,
                   style: Theme.of(context).textTheme.bodyMedium,
                   textAlign: TextAlign.left,
                   overflow: TextOverflow.ellipsis,
@@ -79,11 +78,14 @@ class MyFileState extends State<MyFile> {
                 ),
                 // Доп информация под названием файла
                 Row(children: [
-                  // Расширение файла
-                  Text(
-                    widget.file.name.substring(widget.file.name.lastIndexOf('.')),
-                    style: Theme.of(context).textTheme.bodySmall,),
-                  SizedBox(width: 15, height: 10,),
+                  // Расширение файла (безопасно)
+                  if (widget.file.extension.isNotEmpty) ...[
+                    Text(
+                      widget.file.extension,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(width: 15, height: 10),
+                  ],
                   // Размер файла
                   Text(
                     widget.file.sizeFormatted, // Используем готовое форматирование размера файла

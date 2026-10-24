@@ -38,9 +38,9 @@ class MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
-  void _removeLocalFile(String fileName) {
+  void _removeLocalFile(String fileId) {
     setState(() {
-      _receivedFiles.removeWhere((f) => f.name == fileName);
+      _receivedFiles.removeWhere((f) => f.id == fileId || f.name == fileId);
     });
   }
 
@@ -108,17 +108,15 @@ class MyFilesPageState extends State<MyFilesPage> {
       // Кнопка выбора файлов
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final result = await FilePicker.pickFiles(allowMultiple: true);
-          if (result != null) {
+          final files = await FilePicker.pickFiles();
+          if (files.isNotEmpty && mounted) {
             final service = Provider.of<DualModeService>(context, listen: false);
             // Этот метод внутри себя отправляет уведомления всем пирам
-            service.addSharedFiles(result.paths.whereType<String>().toList());
+            service.addSharedFiles(files.map((f) => f.path).whereType<String>().toList());
 
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Файлы добавлены и синхронизированы (${result.files.length} шт.)')),
-              );
-            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Файлы добавлены и синхронизированы (${files.length} шт.)')),
+            );
           }
         },
         tooltip: 'Добавить файлы в общий доступ',
@@ -158,12 +156,12 @@ class MyFilesPageState extends State<MyFilesPage> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: MyFile(
-                key: ValueKey(file.name),
+                key: ValueKey(file.id),
                 file: file,
                 peer: widget.peer,
                 onDownloaded: () {
-                  _removeLocalFile(file.name);
-            },
+                  _removeLocalFile(file.id);
+                },
               ),
             );
           },

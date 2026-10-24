@@ -18,7 +18,7 @@ class MdnsService extends ChangeNotifier {
   static const String serviceType = '_fileshare._tcp';
 
   // --- Регистрация сервиса ---
-  Future<bool> registerService(String serviceName, int port, {String? networkPassword}) async {
+  Future<bool> registerService(String serviceName, int port, {String? ip, String? networkPassword}) async {
     await unregisterService();
 
     try {
@@ -26,6 +26,9 @@ class MdnsService extends ChangeNotifier {
         "device_name": Uint8List.fromList(utf8.encode(serviceName)),
         "version": Uint8List.fromList(utf8.encode('1.0')),
       };
+      if (ip != null && ip.isNotEmpty) {
+        txt['ip'] = Uint8List.fromList(utf8.encode(ip));
+      }
       if (networkPassword != null && networkPassword.isNotEmpty){
         txt['password'] = Uint8List.fromList(utf8.encode(networkPassword));
       }
@@ -41,7 +44,7 @@ class MdnsService extends ChangeNotifier {
 
       if (kDebugMode) {
 
-        print('mDNS: Сервис "$serviceName" зарегистрирован на порту $port');
+        print('mDNS: Сервис "$serviceName" зарегистрирован на порту $port${ip != null ? " (IP: $ip)" : ""}');
         if (networkPassword != null && networkPassword.isNotEmpty){
           print("Пароль установлен");
         }

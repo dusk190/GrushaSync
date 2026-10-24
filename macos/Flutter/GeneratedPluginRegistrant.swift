@@ -7,7 +7,7 @@ import Foundation
 
 import device_info_plus
 import downloadsfolder
-import file_picker
+import file_picker_darwin
 import network_info_plus
 import nsd_macos
 import screen_retriever_macos
