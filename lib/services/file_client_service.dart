@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/peer_device.dart';
 import '../models/peer_file.dart';
 import 'network_utils.dart';
+import 'log_service.dart';
 
 class FileClientService {
   final Map<String, ValueNotifier<double>> downloadProgresses = {};
@@ -24,7 +25,7 @@ class FileClientService {
   }) async {
     try {
       final url = Uri.http('${peer.host}:${peer.port}', filesPath);
-      if (kDebugMode) print('Запрос файлов к $url');
+      LogService.info('Client', 'Запрос списка файлов у "${peer.name}" (${peer.host}:${peer.port})');
       final response = await http.get(url).timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
@@ -38,13 +39,11 @@ class FileClientService {
           peerName: peer.name,
         )).toList();
 
-        if (kDebugMode) {
-          print('Получено ${files.length} файлов от ${peer.name}');
-        }
+        LogService.info('Client', 'Получен список файлов (${files.length} шт.) от "${peer.name}"');
         return files;
       }
     } catch (e) {
-      if (kDebugMode) print('Ошибка получения файлов от ${peer.name}: $e');
+      LogService.error('Client', 'Ошибка получения списка файлов от "${peer.name}"', e);
       onPeerFailed?.call(peer);
     }
     return [];
@@ -124,9 +123,7 @@ class FileClientService {
 
       if (await outputFileFinal.exists()) {
         final fileSize = await outputFileFinal.length();
-        if (kDebugMode) {
-          print('Скачан файл: ${file.name} (${NetworkUtils.formatSize(fileSize)}) в ${downloadDir.path}');
-        }
+        LogService.info('Client', 'Успешно скачан файл: "${file.name}" (${NetworkUtils.formatSize(fileSize)}) в ${downloadDir.path}');
         return true;
       }
       return false;
@@ -134,7 +131,7 @@ class FileClientService {
       downloadingStates[file.id] = false;
       downloadingStates[file.name] = false;
       onStateChanged?.call();
-      if (kDebugMode) print('Ошибка скачивания с ${peer.name}: $e');
+      LogService.error('Client', 'Ошибка скачивания "${file.name}" с "${peer.name}"', e);
       onPeerFailed?.call(peer);
       return false;
     }
@@ -163,12 +160,10 @@ class FileClientService {
         ).timeout(const Duration(seconds: 3));
 
         if (response.statusCode == 200) {
-          if (kDebugMode) print('Уведомление отправлено на ${peer.name}');
+          LogService.info('Client', 'Уведомление об обновлении отправлено на "${peer.name}"');
         }
       } catch (e) {
-        if (kDebugMode) {
-          print('Не удалось уведомить ${peer.name}: $e (устройство оффлайн)');
-        }
+        LogService.warn('Client', 'Не удалось уведомить "${peer.name}" (оффлайн): $e');
         onPeerFailed?.call(peer);
       }
     }

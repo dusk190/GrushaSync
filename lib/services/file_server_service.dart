@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../models/shared_file.dart';
 import 'network_utils.dart';
+import 'log_service.dart';
 
 class FileServerService {
   HttpServer? _httpServer;
@@ -27,10 +28,10 @@ class FileServerService {
       _httpServer = await HttpServer.bind(InternetAddress.anyIPv4, port);
       _isRunning = true;
       _handleIncomingRequests();
-      if (kDebugMode) print('HTTP Сервер успешно запущен на порту $port');
+      LogService.info('Server', 'HTTP-сервер запущен на порту $port');
       return true;
     } catch (e) {
-      if (kDebugMode) print('Ошибка запуска HTTP сервера: $e');
+      LogService.error('Server', 'Ошибка запуска HTTP-сервера на порту $port', e);
       _isRunning = false;
       return false;
     }
@@ -74,9 +75,7 @@ class FileServerService {
           final data = jsonDecode(body);
           final senderName = data['deviceName'] ?? 'Unknown';
 
-          if (kDebugMode) {
-            print('Получено уведомление об обновлении файлов от $senderName');
-          }
+          LogService.info('Server', 'Получено уведомление об обновлении файлов от $senderName (${request.connectionInfo?.remoteAddress.address})');
 
           onNotifyReceived();
 
@@ -150,11 +149,9 @@ class FileServerService {
       await request.response.addStream(stream);
       await request.response.close();
 
-      if (kDebugMode) {
-        print('Файл успешно отдан клиенту: ${fileInfo.name} (${NetworkUtils.formatSize(fileSize)})');
-      }
+      LogService.info('Server', 'Отдан файл "${fileInfo.name}" (${NetworkUtils.formatSize(fileSize)}) клиенту ${request.connectionInfo?.remoteAddress.address}');
     } catch (e) {
-      if (kDebugMode) print('Ошибка отправки файла $encodedFileId: $e');
+      LogService.error('Server', 'Ошибка отправки файла $encodedFileId клиенту', e);
       try {
         request.response
           ..statusCode = 500

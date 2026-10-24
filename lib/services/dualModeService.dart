@@ -12,6 +12,7 @@ export '../models/peer_file.dart';
 import 'ConfigService.dart';
 import 'mdnsService.dart';
 import 'network_utils.dart';
+import 'log_service.dart';
 import 'peer_discovery_service.dart';
 import 'file_server_service.dart';
 import 'file_client_service.dart';
@@ -81,6 +82,7 @@ class DualModeService extends ChangeNotifier {
       networkPassword: _discovery.networkPassword,
     );
     await _discovery.startDiscovery();
+    LogService.info('App', 'Инициализация завершена: устройство "$_myDeviceName", IP: $_currentIp, порт: $_serverPort');
 
     notifyListeners();
   }

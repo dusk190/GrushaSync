@@ -5,6 +5,7 @@ import 'package:nsd/nsd.dart' as nsd;
 import '../models/peer_device.dart';
 import 'mdnsService.dart';
 import 'network_utils.dart';
+import 'log_service.dart';
 
 class PeerDiscoveryService extends ChangeNotifier {
   final MdnsService _mdns = MdnsService();
@@ -65,7 +66,7 @@ class PeerDiscoveryService extends ChangeNotifier {
     _peers.removeWhere((p) => p.id == peer.id || (p.host == peer.host && p.port == peer.port));
     if (_peers.length != beforeCount) {
       if (kDebugMode) {
-        print('Оффлайн-устройство удалено: ${peer.name} (${peer.host})');
+        LogService.warn('Discovery', 'Пир оффлайн, удален из списка: ${peer.name} (${peer.host})');
       }
       notifyListeners();
     }
@@ -85,7 +86,7 @@ class PeerDiscoveryService extends ChangeNotifier {
 
       // Пропускаем своё устройство по имени
       if (_myDeviceName != null && serviceName == _myDeviceName) {
-        if (kDebugMode) print('Пропускаем своё устройство: $serviceName');
+        LogService.debug('Discovery', 'Пропуск собственного устройства: $serviceName');
         continue;
       }
 
@@ -93,11 +94,11 @@ class PeerDiscoveryService extends ChangeNotifier {
       final servicePassword = _getPasswordFromService(service);
       if (_networkPassword != null && _networkPassword!.isNotEmpty) {
         if (servicePassword != _networkPassword) {
-          if (kDebugMode) print('Пропускаем устройство $serviceName, пароль не совпадает');
+          LogService.warn('Discovery', 'Устройство "$serviceName" пропущено: не совпал пароль сети');
           continue;
         }
       } else if (servicePassword != null && servicePassword.isNotEmpty) {
-        if (kDebugMode) print('Пропускаем устройство $serviceName, защищено паролем');
+        LogService.warn('Discovery', 'Устройство "$serviceName" пропущено: защищено паролем');
         continue;
       }
 
@@ -108,7 +109,7 @@ class PeerDiscoveryService extends ChangeNotifier {
       final txtIp = _getIpFromService(service);
       if (txtIp != null && txtIp.isNotEmpty) {
         resolvedIp = txtIp;
-        if (kDebugMode) print('IP получен из TXT-записи $serviceName: $resolvedIp');
+        LogService.debug('Discovery', 'IP для "$serviceName" получен из TXT: $resolvedIp');
       }
 
       // 2. IP из разрешенных адресов nsd
@@ -116,7 +117,7 @@ class PeerDiscoveryService extends ChangeNotifier {
         for (var addr in service.addresses!) {
           if (addr.type == InternetAddressType.IPv4) {
             resolvedIp = addr.address;
-            if (kDebugMode) print('IP получен из service.addresses: $resolvedIp');
+            LogService.debug('Discovery', 'IP для "$serviceName" получен из адресов: $resolvedIp');
             break;
           }
         }
@@ -142,7 +143,7 @@ class PeerDiscoveryService extends ChangeNotifier {
       }
 
       if (resolvedIp == null) {
-        if (kDebugMode) print('Не удалось разрешить $serviceHost, пропускаем');
+        LogService.warn('Discovery', 'Не удалось определить IP для хоста "$serviceHost"');
         continue;
       }
 
@@ -164,14 +165,14 @@ class PeerDiscoveryService extends ChangeNotifier {
           port: service.port ?? 8080,
           lastSeen: DateTime.now(),
         ));
-        if (kDebugMode) print('Устройство добавлено: $serviceName → $resolvedIp:${service.port}');
+        LogService.info('Discovery', 'Обнаружен пир: "$serviceName" ($resolvedIp:${service.port})');
       }
     }
 
     notifyListeners();
 
     if (kDebugMode) {
-      print('Обновлён список пиров: ${_peers.length} устройств');
+      LogService.info('Discovery', 'Активных устройств в сети: ${_peers.length}');
       for (var p in _peers) {
         print('   - ${p.name} (${p.host}:${p.port})');
       }

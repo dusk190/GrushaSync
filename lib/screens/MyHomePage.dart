@@ -9,6 +9,7 @@ import '../widgets/MyDeviceFolder.dart';
 import '../services/dualModeService.dart';
 import '../screens/PasswordSettingScreen.dart';
 import '../services/OpenGrushaFolder.dart';
+import '../screens/LogsPage.dart';
 
 
 // Экран главного меню
@@ -91,6 +92,16 @@ class MyHomePageState extends State<MyHomePage> {
                   // Переключение темной/светлой темы
                   MyDialButton(icon: Icon(Theme.of(context).brightness == Brightness.dark ? Icons.light_mode : Icons.dark_mode),
                       onTap: widget.changeTheme,
+                      context: context),
+                  // Логи приложения (Консоль)
+                  MyDialButton(
+                      icon: const Icon(Icons.terminal),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const LogsPage()),
+                        );
+                      },
                       context: context),
                   if (Platform.isWindows)
                     MyDialButton(

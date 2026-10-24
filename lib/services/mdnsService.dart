@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'log_service.dart';
 import 'package:nsd/nsd.dart' as nsd;
 
 class MdnsService extends ChangeNotifier {
@@ -44,7 +45,7 @@ class MdnsService extends ChangeNotifier {
 
       if (kDebugMode) {
 
-        print('mDNS: Сервис "$serviceName" зарегистрирован на порту $port${ip != null ? " (IP: $ip)" : ""}');
+        LogService.info('mDNS', 'Сервис "$serviceName" зарегистрирован в сети на порту $port${ip != null ? " (IP: $ip)" : ""}');
         if (networkPassword != null && networkPassword.isNotEmpty){
           print("Пароль установлен");
         }
@@ -53,7 +54,7 @@ class MdnsService extends ChangeNotifier {
       return true;
     } catch (e) {
       if (kDebugMode) {
-        print('mDNS: Ошибка регистрации: $e');
+        LogService.error('mDNS', 'Ошибка регистрации сервиса "$serviceName"', e);
       }
       return false;
     }
@@ -82,11 +83,11 @@ class MdnsService extends ChangeNotifier {
       notifyListeners();
 
       if (kDebugMode) {
-        print('mDNS: Поиск сервисов запущен');
+        LogService.info('mDNS', 'Поиск устройств в сети запущен (тип: $serviceType)');
       }
     } catch (e) {
       if (kDebugMode) {
-        print('❌ mDNS: Ошибка поиска: $e');
+        LogService.error('mDNS', 'Ошибка поиска устройств mDNS', e);
       }
     }
   }
