@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../models/peer_device.dart';
@@ -12,6 +13,7 @@ export '../models/peer_file.dart';
 import 'ConfigService.dart';
 import 'mdnsService.dart';
 import 'network_utils.dart';
+import 'log_service.dart';
 import 'peer_discovery_service.dart';
 import 'file_server_service.dart';
 import 'file_client_service.dart';
@@ -43,6 +45,7 @@ class DualModeService extends ChangeNotifier {
   List<SharedFile> get mySharedFiles => _mySharedFiles;
   MdnsService get mdns => _discovery.mdns;
   String? get networkPassword => _discovery.networkPassword;
+  String? get myDeviceName => _myDeviceName;
   String get filesPath => _filesPath;
   String get downloadPath => _downloadPath;
 
@@ -52,6 +55,7 @@ class DualModeService extends ChangeNotifier {
       downloadPath: _downloadPath,
       getSharedFiles: () => _mySharedFiles,
       onNotifyReceived: _onFilesUpdatedByPeer,
+      onFileSent: _onFileSentToPeer,
     );
     _discovery.addListener(_onDiscoveryChanged);
   }
@@ -62,7 +66,13 @@ class DualModeService extends ChangeNotifier {
     await PermissionService.ensurePermissions();
 
     _currentIp = await NetworkUtils.getLocalIp();
-    _myDeviceName = await NetworkUtils.getDeviceName();
+
+    final customName = ConfigService.customDeviceName;
+    if (customName != null && customName.trim().isNotEmpty) {
+      _myDeviceName = customName.trim();
+    } else {
+      _myDeviceName = await NetworkUtils.getDeviceName();
+    }
 
     _discovery.setSelfInfo(
       deviceName: _myDeviceName!,
@@ -81,6 +91,7 @@ class DualModeService extends ChangeNotifier {
       networkPassword: _discovery.networkPassword,
     );
     await _discovery.startDiscovery();
+    LogService.info('App', 'Инициализация завершена: устройство "$_myDeviceName", IP: $_currentIp, порт: $_serverPort');
 
     notifyListeners();
   }
@@ -96,7 +107,10 @@ class DualModeService extends ChangeNotifier {
     for (var path in paths) {
       try {
         final sourceFile = File(path);
-        if (!await sourceFile.exists()) continue;
+        if (!await sourceFile.exists()) {
+          LogService.warn('Server', 'Файл не найден при добавлении в раздачу: $path');
+          continue;
+        }
 
         String fileName = path;
         if (path.contains('/')) {
@@ -105,23 +119,42 @@ class DualModeService extends ChangeNotifier {
           fileName = path.split('\\').last;
         }
 
-        if (!_mySharedFiles.any((f) => f.path == path)) {
-          final fileLength = await sourceFile.length();
-          final fileId = '${DateTime.now().microsecondsSinceEpoch}_${fileLength}_${path.hashCode.abs()}';
+        // Если файл выбран из кэша (например, FilePicker на Android),
+        // система может удалить его в любой момент.
+        // Копируем его в изолированную постоянную папку приложения:
+        String effectivePath = path;
+        if (path.contains('/cache/') || Platform.isAndroid) {
+          try {
+            final docsDir = await getApplicationDocumentsDirectory();
+            final stagingDir = Directory('${docsDir.path}/grusha_staging');
+            if (!await stagingDir.exists()) {
+              await stagingDir.create(recursive: true);
+            }
+            final uniqueName = '${DateTime.now().millisecondsSinceEpoch}_$fileName';
+            final persistentFile = await sourceFile.copy('${stagingDir.path}/$uniqueName');
+            effectivePath = persistentFile.path;
+            LogService.info('Server', 'Создана персистентная копия для раздачи: "$fileName" -> $effectivePath');
+          } catch (e) {
+            LogService.warn('Server', 'Не удалось создать постоянную копию, используем исходный путь: $e');
+          }
+        }
+
+        final readyFile = File(effectivePath);
+        if (!_mySharedFiles.any((f) => f.path == effectivePath || f.path == path)) {
+          final fileLength = await readyFile.length();
+          final fileId = '${DateTime.now().microsecondsSinceEpoch}_${fileLength}_${effectivePath.hashCode.abs()}';
 
           _mySharedFiles.add(SharedFile(
             id: fileId,
             name: fileName,
-            path: path,
+            path: effectivePath,
             size: fileLength,
           ));
 
-          if (kDebugMode) {
-            print('Файл добавлен в общий доступ: $fileName (id: $fileId)');
-          }
+          LogService.info('Server', 'Файл добавлен в раздачу: "$fileName" (${NetworkUtils.formatSize(fileLength)})');
         }
       } catch (e) {
-        if (kDebugMode) print('Ошибка обработки файла $path: $e');
+        LogService.error('Server', 'Ошибка добавления файла "$path" в раздачу', e);
       }
     }
 
@@ -130,11 +163,50 @@ class DualModeService extends ChangeNotifier {
   }
 
   void removeSharedFile(String idOrName, {bool notifyPeers = false}) {
-    _mySharedFiles.removeWhere((f) => f.id == idOrName || f.name == idOrName);
+    final removed = <SharedFile>[];
+    _mySharedFiles.removeWhere((f) {
+      if (f.id == idOrName || f.name == idOrName) {
+        removed.add(f);
+        return true;
+      }
+      return false;
+    });
+
+    for (var file in removed) {
+      LogService.info('Server', 'Файл снят с раздачи: "${file.name}"');
+      if (file.path.contains('grusha_staging') || file.path.contains('/cache/')) {
+        try {
+          final f = File(file.path);
+          if (f.existsSync()) f.deleteSync();
+        } catch (_) {}
+      }
+    }
+
     notifyListeners();
     if (notifyPeers) {
       _notifyPeersAboutUpdate();
     }
+  }
+
+  /// Вызывается сервером после успешного завершения скачивания файла клиентом
+  void _onFileSentToPeer(SharedFile file) async {
+    LogService.info('Server', 'Файл "${file.name}" успешно скачан клиентом. Снимаем с раздачи.');
+
+    // Если файл находился во временной папке grusha_staging или в кэше — удаляем его
+    if (file.path.contains('grusha_staging') || file.path.contains('/cache/')) {
+      try {
+        final f = File(file.path);
+        if (await f.exists()) {
+          await f.delete();
+          LogService.debug('Server', 'Файл раздачи удален с диска: ${file.path}');
+        }
+      } catch (e) {
+        LogService.warn('Server', 'Не удалось удалить временный файл: $e');
+      }
+    }
+
+    // Удаляем из списка раздачи и уведомляем клиентов об обновлении
+    removeSharedFile(file.id, notifyPeers: true);
   }
 
   // --- Клиентские операции ---
@@ -167,9 +239,47 @@ class DualModeService extends ChangeNotifier {
 
   Future<String> getCachedDeviceName() async {
     if (_myDeviceName != null) return _myDeviceName!;
+    final customName = ConfigService.customDeviceName;
+    if (customName != null && customName.trim().isNotEmpty) {
+      _myDeviceName = customName.trim();
+      return _myDeviceName!;
+    }
     final name = await NetworkUtils.getDeviceName();
     _myDeviceName = name;
     return name;
+  }
+
+  /// Установка пользовательского имени устройства и обновление в сети
+  Future<void> setDeviceName(String? newName) async {
+    final cleanName = (newName != null && newName.trim().isNotEmpty) ? newName.trim() : null;
+
+    if (cleanName != null) {
+      await ConfigService.setCustomDeviceName(cleanName);
+      _myDeviceName = cleanName;
+      LogService.info('App', 'Установлено пользовательское имя устройства: "$cleanName"');
+    } else {
+      await ConfigService.removeCustomDeviceName();
+      _myDeviceName = await NetworkUtils.getDeviceName();
+      LogService.info('App', 'Сброшено имя устройства к системному по умолчанию: "$_myDeviceName"');
+    }
+
+    _discovery.setSelfInfo(
+      deviceName: _myDeviceName!,
+      currentIp: _currentIp,
+      networkPassword: _discovery.networkPassword,
+    );
+
+    if (_server.isRunning) {
+      await _discovery.registerSelf(
+        deviceName: _myDeviceName!,
+        port: _serverPort,
+        ip: _currentIp,
+        networkPassword: _discovery.networkPassword,
+      );
+    }
+
+    await _discovery.refreshDiscovery();
+    notifyListeners();
   }
 
   Future<void> setNetworkPassword(String? password) async {

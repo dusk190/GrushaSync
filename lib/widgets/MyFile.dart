@@ -28,15 +28,40 @@ class MyFileState extends State<MyFile> {
     final service = Provider.of<DualModeService>(context, listen: false);
     final fileKey = widget.file.id;
     try {
-      await service.downloadFile(
+      final success = await service.downloadFile(
           widget.peer,
           widget.file,
           (progress) {
             service.getProgressNotifier(fileKey).value = progress;
           }
       );
-      widget.onDownloaded?.call();
-    } catch (e) {}
+      if (success) {
+        widget.onDownloaded?.call();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Файл "${widget.file.name}" успешно скачан')),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Не удалось скачать "${widget.file.name}". Проверьте экран логов'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка скачивания: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   @override

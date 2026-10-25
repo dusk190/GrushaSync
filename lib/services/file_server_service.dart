@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../models/shared_file.dart';
 import 'network_utils.dart';
+import 'log_service.dart';
 
 class FileServerService {
   HttpServer? _httpServer;
@@ -12,6 +13,7 @@ class FileServerService {
   final String downloadPath;
   final List<SharedFile> Function() getSharedFiles;
   final VoidCallback onNotifyReceived;
+  final void Function(SharedFile file)? onFileSent;
 
   bool get isRunning => _isRunning;
 
@@ -20,6 +22,7 @@ class FileServerService {
     required this.downloadPath,
     required this.getSharedFiles,
     required this.onNotifyReceived,
+    this.onFileSent,
   });
 
   Future<bool> start(int port) async {
@@ -27,10 +30,10 @@ class FileServerService {
       _httpServer = await HttpServer.bind(InternetAddress.anyIPv4, port);
       _isRunning = true;
       _handleIncomingRequests();
-      if (kDebugMode) print('HTTP Сервер успешно запущен на порту $port');
+      LogService.info('Server', 'HTTP-сервер запущен на порту $port');
       return true;
     } catch (e) {
-      if (kDebugMode) print('Ошибка запуска HTTP сервера: $e');
+      LogService.error('Server', 'Ошибка запуска HTTP-сервера на порту $port', e);
       _isRunning = false;
       return false;
     }
@@ -62,7 +65,10 @@ class FileServerService {
 
       // GET /download/{fileId} - скачивание файла
       if (path.startsWith(downloadPath)) {
-        final fileId = path.substring(downloadPath.length + 1);
+        String fileId = path.substring(downloadPath.length);
+        if (fileId.startsWith('/')) {
+          fileId = fileId.substring(1);
+        }
         await _handleDownloadRequest(request, fileId);
         return;
       }
@@ -74,9 +80,7 @@ class FileServerService {
           final data = jsonDecode(body);
           final senderName = data['deviceName'] ?? 'Unknown';
 
-          if (kDebugMode) {
-            print('Получено уведомление об обновлении файлов от $senderName');
-          }
+          LogService.info('Server', 'Получено уведомление об обновлении файлов от $senderName (${request.connectionInfo?.remoteAddress.address})');
 
           onNotifyReceived();
 
@@ -103,7 +107,10 @@ class FileServerService {
 
   String _generateFileListJson() {
     final sharedFiles = getSharedFiles();
-    final files = sharedFiles.map((f) => {
+    // Отдаем только те файлы, которые реально существуют на диске
+    final existingFiles = sharedFiles.where((f) => File(f.path).existsSync()).toList();
+
+    final files = existingFiles.map((f) => {
       'id': f.id,
       'name': f.name,
       'size': f.size,
@@ -118,18 +125,21 @@ class FileServerService {
 
   Future<void> _handleDownloadRequest(HttpRequest request, String encodedFileId) async {
     try {
-      final fileId = Uri.decodeComponent(encodedFileId);
+      String fileId = encodedFileId;
+      try {
+        fileId = Uri.decodeComponent(encodedFileId);
+      } catch (_) {}
       final sharedFiles = getSharedFiles();
 
       final fileInfo = sharedFiles.firstWhere(
-        (f) => f.id == fileId || f.name == fileId,
-        orElse: () => throw Exception('File not found: $fileId'),
+        (f) => f.id == fileId || f.name == fileId || f.id == encodedFileId || f.name == encodedFileId,
+        orElse: () => throw Exception('Файл не найден в раздаче сервера: "$fileId"'),
       );
 
       final file = File(fileInfo.path);
 
       if (!await file.exists()) {
-        if (kDebugMode) print('Файл не найден на диске: ${fileInfo.path}');
+        LogService.warn('Server', 'Файл не найден на диске: "${fileInfo.path}"');
         request.response
           ..statusCode = 404
           ..write('File not found')
@@ -150,11 +160,12 @@ class FileServerService {
       await request.response.addStream(stream);
       await request.response.close();
 
-      if (kDebugMode) {
-        print('Файл успешно отдан клиенту: ${fileInfo.name} (${NetworkUtils.formatSize(fileSize)})');
-      }
+      LogService.info('Server', 'Отдан файл "${fileInfo.name}" (${NetworkUtils.formatSize(fileSize)}) клиенту ${request.connectionInfo?.remoteAddress.address}');
+
+      // Оповещаем сервис об успешной передаче файла клиенту
+      onFileSent?.call(fileInfo);
     } catch (e) {
-      if (kDebugMode) print('Ошибка отправки файла $encodedFileId: $e');
+      LogService.error('Server', 'Ошибка отправки файла $encodedFileId клиенту', e);
       try {
         request.response
           ..statusCode = 500

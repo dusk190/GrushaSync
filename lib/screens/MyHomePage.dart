@@ -9,7 +9,8 @@ import '../widgets/MyDeviceFolder.dart';
 import '../services/dualModeService.dart';
 import '../screens/PasswordSettingScreen.dart';
 import '../services/OpenGrushaFolder.dart';
-
+import '../screens/LogsPage.dart';
+import '../services/network_utils.dart';
 
 // Экран главного меню
 
@@ -22,17 +23,111 @@ class MyHomePage extends StatefulWidget {
 }
 
 class MyHomePageState extends State<MyHomePage> {
-  late Future<String> _deviceName;
   @override
   void initState() {
     super.initState();
-    _deviceName = _initAndGetName();
+    _initService();
   }
 
-  Future<String> _initAndGetName() async {
+  Future<void> _initService() async {
     final service = Provider.of<DualModeService>(context, listen: false);
     await service.initialize();
-    return await service.getCachedDeviceName();
+  }
+
+  Future<void> _showEditDeviceNameDialog(DualModeService service) async {
+    final theme = Theme.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final currentName = service.myDeviceName ?? await service.getCachedDeviceName();
+    final defaultSystemName = await NetworkUtils.getDeviceName();
+    final controller = TextEditingController(text: currentName);
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          backgroundColor: theme.colorScheme.secondary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: theme.colorScheme.primary, width: 2),
+          ),
+          title: Text(
+            'Имя устройства',
+            style: theme.textTheme.displayLarge?.copyWith(fontSize: 20),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Под этим именем ваше устройство будут видеть другие участники сети:',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  maxLength: 32,
+                  decoration: InputDecoration(
+                    hintText: 'Например: Ноутбук Артема',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.clear, size: 20),
+                      onPressed: controller.clear,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'По умолчанию: $defaultSystemName',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.of(dialogCtx).pop();
+                await service.setDeviceName(null);
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Имя сброшено к системному: $defaultSystemName')),
+                );
+              },
+              child: const Text('По умолчанию'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: const Text('Отмена'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                final newName = controller.text.trim();
+                Navigator.of(dialogCtx).pop();
+                if (newName.isNotEmpty && newName != currentName) {
+                  await service.setDeviceName(newName);
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Имя устройства изменено на "$newName"')),
+                  );
+                }
+              },
+              child: const Text('Сохранить'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -62,24 +157,24 @@ class MyHomePageState extends State<MyHomePage> {
                 childrenButtonSize: const Size(46, 46),
                 elevation: 0,
                 spacing: 7,
-                buttonSize: Size(46, 46),
+                buttonSize: const Size(46, 46),
                 childPadding: EdgeInsets.zero,
                 spaceBetweenChildren: 5,
 
                 direction: SpeedDialDirection.down,
-                  closeDialOnPop: true,
+                closeDialOnPop: true,
                 visible: true,
                 closeManually: false,
                 renderOverlay: false,
                 children: [
                   // Открытие папки груши в проводнике
                   MyDialButton(
-                      icon: Icon(Icons.folder_open),
+                      icon: const Icon(Icons.folder_open),
                       onTap: Opengrushafolder.openFolder,
                       context: context),
                   // Изменение пароля сети (переход на другой экран)
                   MyDialButton(
-                      icon: Icon(Icons.lock_outline),
+                      icon: const Icon(Icons.lock_outline),
                       onTap: () {
                         Navigator.push(context, PageRouteBuilder(
                           pageBuilder: (context, anim, secAnim) => PasswordSettingsScreen(),
@@ -92,26 +187,47 @@ class MyHomePageState extends State<MyHomePage> {
                   MyDialButton(icon: Icon(Theme.of(context).brightness == Brightness.dark ? Icons.light_mode : Icons.dark_mode),
                       onTap: widget.changeTheme,
                       context: context),
+                  // Логи приложения (Консоль)
+                  MyDialButton(
+                      icon: const Icon(Icons.terminal),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const LogsPage()),
+                        );
+                      },
+                      context: context),
                   if (Platform.isWindows)
                     MyDialButton(
-                      icon: Icon(Icons.refresh),
+                      icon: const Icon(Icons.refresh),
                       onTap: service.refreshMdns,
                       context: context)
                 ]),
-              SizedBox(width: 5,)
+              const SizedBox(width: 5,)
             ],
 
             backgroundColor: Theme.of(context).colorScheme.secondary,
-            // Название нашего устройства
+            // Название нашего устройства с возможностью редактирования по клику
             titleTextStyle: Theme.of(context).textTheme.displayLarge,
-            title: FutureBuilder<String>(
-                future: _deviceName,
-                builder: (context, snapshot) {
-                  if (snapshot.hasData) {
-                    return Text("GS (${snapshot.data})");
-                  }
-                  return const Text("GS (загрузка...)");
-                },
+            title: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _showEditDeviceNameDialog(service),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        "GS (${service.myDeviceName ?? 'загрузка...'})",
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.edit, size: 16, color: Colors.grey),
+                  ],
+                ),
+              ),
             ),
             // Декоративная полоска для разделения appBar и body
             bottom: PreferredSize(
