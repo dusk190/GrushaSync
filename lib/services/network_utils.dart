@@ -35,42 +35,86 @@ class NetworkUtils {
             lower.contains('docker') ||
             lower.contains('tailscale') ||
             lower.contains('hamachi') ||
+            lower.contains('radmin') ||
+            lower.contains('fam') ||
+            lower.contains('wireguard') ||
+            lower.contains('zerotier') ||
             lower.contains('tap') ||
-            lower.contains('tun');
+            lower.contains('tun') ||
+            lower.contains('vpn') ||
+            lower.contains('vethernet') ||
+            lower.contains('hyper-v') ||
+            lower.contains('loopback') ||
+            lower.contains('bluetooth') ||
+            lower.contains('pseudo') ||
+            lower.contains('teredo') ||
+            lower.contains('pcap');
       }
 
-      // Сначала ищем среди реальных физических интерфейсов
+      final candidates = <_CandidateIp>[];
+
       for (var interface in interfaces) {
-        if (isVirtual(interface.name)) continue;
+        final virtual = isVirtual(interface.name);
         for (var addr in interface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 &&
-              !addr.address.startsWith('127.') &&
-              !addr.address.startsWith('169.254.')) {
-            if (kDebugMode) {
-              print('Найден IP через NetworkInterface (${interface.name}): ${addr.address}');
-            }
-            return addr.address;
+          if (addr.type != InternetAddressType.IPv4) continue;
+          final ip = addr.address;
+          if (ip.startsWith('127.') || ip.startsWith('169.254.') || ip == '0.0.0.0') {
+            continue;
           }
+
+          int score = 0;
+          if (!virtual) {
+            score += 1000;
+          }
+
+          if (ip.startsWith('192.168.')) {
+            score += 500;
+          } else if (ip.startsWith('10.')) {
+            score += 300;
+          } else if (_isPrivate172(ip)) {
+            score += 200;
+          } else if (ip.startsWith('26.')) {
+            // Radmin VPN
+            score -= 500;
+          } else {
+            score += 100;
+          }
+
+          final lower = interface.name.toLowerCase();
+          if (lower.contains('wi-fi') ||
+              lower.contains('wifi') ||
+              lower.contains('wlan') ||
+              lower.contains('беспроводн') ||
+              lower.contains('ethernet') ||
+              lower.contains('eth') ||
+              lower.contains('lan')) {
+            score += 100;
+          }
+
+          candidates.add(_CandidateIp(ip, interface.name, score));
         }
       }
 
-      // Fallback: любой доступный IPv4
-      for (var interface in interfaces) {
-        for (var addr in interface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 &&
-              !addr.address.startsWith('127.') &&
-              !addr.address.startsWith('169.254.')) {
-            if (kDebugMode) {
-              print('Fallback IP (${interface.name}): ${addr.address}');
-            }
-            return addr.address;
+      if (candidates.isNotEmpty) {
+        candidates.sort((a, b) => b.score.compareTo(a.score));
+        if (kDebugMode) {
+          for (var c in candidates) {
+            print('IP-кандидат: ${c.ip} (${c.interfaceName}) score=${c.score}');
           }
         }
+        return candidates.first.ip;
       }
     } catch (e) {
       if (kDebugMode) print('Ошибка NetworkInterface: $e');
     }
     return null;
+  }
+
+  static bool _isPrivate172(String ip) {
+    final parts = ip.split('.');
+    if (parts.length != 4 || parts[0] != '172') return false;
+    final second = int.tryParse(parts[1]);
+    return second != null && second >= 16 && second <= 31;
   }
 
   /// Читаемое имя модели устройства
@@ -167,4 +211,12 @@ class NetworkUtils {
       }
     }
   }
+}
+
+class _CandidateIp {
+  final String ip;
+  final String interfaceName;
+  final int score;
+
+  _CandidateIp(this.ip, this.interfaceName, this.score);
 }

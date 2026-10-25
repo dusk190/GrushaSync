@@ -56,39 +56,41 @@ class MyHomePageState extends State<MyHomePage> {
             'Имя устройства',
             style: theme.textTheme.displayLarge?.copyWith(fontSize: 20),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Под этим именем ваше устройство будут видеть другие участники сети:',
-                style: theme.textTheme.bodySmall,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                maxLength: 32,
-                decoration: InputDecoration(
-                  hintText: 'Например: Ноутбук Артема',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.clear, size: 20),
-                    onPressed: controller.clear,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Под этим именем ваше устройство будут видеть другие участники сети:',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  maxLength: 32,
+                  decoration: InputDecoration(
+                    hintText: 'Например: Ноутбук Артема',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.clear, size: 20),
+                      onPressed: controller.clear,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'По умолчанию: $defaultSystemName',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey[600],
+                const SizedBox(height: 4),
+                Text(
+                  'По умолчанию: $defaultSystemName',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[600],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             TextButton(
