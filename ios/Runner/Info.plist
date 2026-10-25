@@ -66,5 +66,17 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>GrushaSync использует локальную сеть для поиска устройств и передачи файлов без интернета.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_fileshare._tcp</string>
+	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>GrushaSync требуется доступ к галерее для выбора и передачи фото и видео.</string>
 </dict>
 </plist>

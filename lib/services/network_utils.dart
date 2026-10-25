@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 
 class NetworkUtils {
   /// Получение локального IPv4-адреса устройства.
@@ -122,6 +123,9 @@ class NetworkUtils {
     if (Platform.isAndroid) {
       final androidInfo = await DeviceInfoPlugin().androidInfo;
       return androidInfo.model.isNotEmpty ? androidInfo.model : 'Android';
+    } else if (Platform.isIOS) {
+      final iosInfo = await DeviceInfoPlugin().iosInfo;
+      return iosInfo.name.isNotEmpty ? iosInfo.name : (iosInfo.model.isNotEmpty ? iosInfo.model : 'iPhone');
     } else if (Platform.isWindows) {
       return Platform.localHostname.split('.').first;
     }
@@ -186,7 +190,7 @@ class NetworkUtils {
     return null;
   }
 
-  /// Папка для сохранения скачанных файлов (Downloads/GrushaSync)
+  /// Папка для сохранения скачанных файлов (Downloads/GrushaSync на ПК, Documents/GrushaSync на iOS, Downloads/GrushaSync на Android)
   static Future<Directory> getDownloadDirectory() async {
     if (Platform.isWindows) {
       final userProfile = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Default';
@@ -197,6 +201,13 @@ class NetworkUtils {
     } else if (Platform.isLinux) {
       final home = Platform.environment['HOME'] ?? '/home/default';
       return Directory('$home/Downloads/GrushaSync');
+    } else if (Platform.isIOS) {
+      final docDir = await getApplicationDocumentsDirectory();
+      final grushaDir = Directory('${docDir.path}/GrushaSync');
+      if (!await grushaDir.exists()) {
+        await grushaDir.create(recursive: true);
+      }
+      return grushaDir;
     } else {
       const downloadsPath = '/storage/emulated/0/Download';
       final grushaDir = Directory('$downloadsPath/GrushaSync');

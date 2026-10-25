@@ -119,11 +119,11 @@ class DualModeService extends ChangeNotifier {
           fileName = path.split('\\').last;
         }
 
-        // Если файл выбран из кэша (например, FilePicker на Android),
+        // Если файл выбран из кэша (например, FilePicker на Android/iOS),
         // система может удалить его в любой момент.
         // Копируем его в изолированную постоянную папку приложения:
         String effectivePath = path;
-        if (path.contains('/cache/') || Platform.isAndroid) {
+        if (path.contains('/cache/') || path.contains('/tmp/') || Platform.isAndroid || Platform.isIOS) {
           try {
             final docsDir = await getApplicationDocumentsDirectory();
             final stagingDir = Directory('${docsDir.path}/grusha_staging');

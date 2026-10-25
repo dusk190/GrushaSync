@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
+import 'package:downloadsfolder/downloadsfolder.dart';
 
 import 'network_utils.dart';
 import 'log_service.dart';
@@ -18,6 +19,13 @@ class Opengrushafolder {
         LogService.info('App', 'Папка GrushaSync открыта в проводнике Windows: ${grushaDir.path}');
       } else if (Platform.isAndroid) {
         await _openAndroidFolder(grushaDir);
+      } else if (Platform.isIOS) {
+        try {
+          await openDownloadFolder();
+          LogService.info('App', 'Открыта системная папка файлов iOS');
+        } catch (e) {
+          LogService.warn('App', 'Не удалось открыть папку на iOS: $e');
+        }
       }
     } catch (e) {
       LogService.error('App', 'Ошибка открытия папки GrushaSync', e);
