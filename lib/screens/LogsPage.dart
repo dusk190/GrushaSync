@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/log_service.dart';
+import '../services/network_utils.dart';
 
 class LogsPage extends StatefulWidget {
   const LogsPage({super.key});
@@ -63,6 +65,35 @@ class _LogsPageState extends State<LogsPage> {
     }
   }
 
+  Future<void> _saveLogsToFile() async {
+    try {
+      final dir = await NetworkUtils.getDownloadDirectory();
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      final file = File('${dir.path}/grusha_logs.txt');
+      final text = LogService.instance.getAllLogsAsText();
+      await file.writeAsString(text);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Логи сохранены: ${file.path}'),
+            backgroundColor: Colors.green[700],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка сохранения логов: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const bgColor = Color(0xFF212121);
@@ -87,6 +118,11 @@ class _LogsPageState extends State<LogsPage> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.save_alt, color: Colors.white70, size: 22),
+            tooltip: 'Сохранить логи в файл GrushaSync',
+            onPressed: _saveLogsToFile,
+          ),
           IconButton(
             icon: const Icon(Icons.copy, color: Colors.white70, size: 20),
             tooltip: 'Скопировать все логи',

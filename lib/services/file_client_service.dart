@@ -61,10 +61,11 @@ class FileClientService {
     try {
       final url = Uri.http('${peer.host}:${peer.port}', '$downloadPath/${file.id}');
       final request = http.Request('GET', url);
-      final response = await request.send().timeout(const Duration(seconds: 5));
+      LogService.info('Client', 'Отправлен запрос на скачивание "${file.name}" к $url');
+      final response = await request.send().timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
-        if (kDebugMode) print('Ошибка HTTP при скачивании: ${response.statusCode}');
+        LogService.error('Client', 'Сервер "${peer.name}" вернул статус HTTP ${response.statusCode} при скачивании "${file.name}"');
         return false;
       }
 
@@ -79,7 +80,7 @@ class FileClientService {
         await testFile.writeAsString('test');
         await testFile.delete();
       } catch (e) {
-        if (kDebugMode) print('Нет прав на запись в папку загрузок: $e');
+        LogService.error('Client', 'Нет прав на запись в папку загрузок "${downloadDir.path}"', e);
         return false;
       }
 
@@ -126,6 +127,7 @@ class FileClientService {
         LogService.info('Client', 'Успешно скачан файл: "${file.name}" (${NetworkUtils.formatSize(fileSize)}) в ${downloadDir.path}');
         return true;
       }
+      LogService.error('Client', 'Файл не найден после записи на диск: $finalPath');
       return false;
     } catch (e) {
       downloadingStates[file.id] = false;

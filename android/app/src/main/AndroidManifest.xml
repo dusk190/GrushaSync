@@ -9,12 +9,12 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
     <application
         android:label="GrushaSync"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-        android:label="GrushaSync"
-        android:requestLegacyExternalStorage="true"
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -43,13 +43,31 @@
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
-        ч
-
 
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:mimeType="resource/folder"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:mimeType="vnd.android.document/directory"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW_DOWNLOADS"/>
+        </intent>
+        <package android:name="com.sec.android.app.myfiles"/>
+        <package android:name="com.google.android.documentsui"/>
+        <package android:name="com.google.android.apps.nbu.files"/>
+        <package android:name="com.mi.android.globalFileexplorer"/>
+        <package android:name="com.android.fileexplorer"/>
+        <package android:name="com.coloros.filemanager"/>
+        <package android:name="com.oplus.filemanager"/>
+        <package android:name="com.huawei.hidisk"/>
+        <package android:name="com.transsion.filemanager"/>
     </queries>
 </manifest>
