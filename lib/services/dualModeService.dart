@@ -45,6 +45,7 @@ class DualModeService extends ChangeNotifier {
   List<SharedFile> get mySharedFiles => _mySharedFiles;
   MdnsService get mdns => _discovery.mdns;
   String? get networkPassword => _discovery.networkPassword;
+  String? get myDeviceName => _myDeviceName;
   String get filesPath => _filesPath;
   String get downloadPath => _downloadPath;
 
@@ -65,7 +66,13 @@ class DualModeService extends ChangeNotifier {
     await PermissionService.ensurePermissions();
 
     _currentIp = await NetworkUtils.getLocalIp();
-    _myDeviceName = await NetworkUtils.getDeviceName();
+
+    final customName = ConfigService.customDeviceName;
+    if (customName != null && customName.trim().isNotEmpty) {
+      _myDeviceName = customName.trim();
+    } else {
+      _myDeviceName = await NetworkUtils.getDeviceName();
+    }
 
     _discovery.setSelfInfo(
       deviceName: _myDeviceName!,
@@ -232,9 +239,47 @@ class DualModeService extends ChangeNotifier {
 
   Future<String> getCachedDeviceName() async {
     if (_myDeviceName != null) return _myDeviceName!;
+    final customName = ConfigService.customDeviceName;
+    if (customName != null && customName.trim().isNotEmpty) {
+      _myDeviceName = customName.trim();
+      return _myDeviceName!;
+    }
     final name = await NetworkUtils.getDeviceName();
     _myDeviceName = name;
     return name;
+  }
+
+  /// Установка пользовательского имени устройства и обновление в сети
+  Future<void> setDeviceName(String? newName) async {
+    final cleanName = (newName != null && newName.trim().isNotEmpty) ? newName.trim() : null;
+
+    if (cleanName != null) {
+      await ConfigService.setCustomDeviceName(cleanName);
+      _myDeviceName = cleanName;
+      LogService.info('App', 'Установлено пользовательское имя устройства: "$cleanName"');
+    } else {
+      await ConfigService.removeCustomDeviceName();
+      _myDeviceName = await NetworkUtils.getDeviceName();
+      LogService.info('App', 'Сброшено имя устройства к системному по умолчанию: "$_myDeviceName"');
+    }
+
+    _discovery.setSelfInfo(
+      deviceName: _myDeviceName!,
+      currentIp: _currentIp,
+      networkPassword: _discovery.networkPassword,
+    );
+
+    if (_server.isRunning) {
+      await _discovery.registerSelf(
+        deviceName: _myDeviceName!,
+        port: _serverPort,
+        ip: _currentIp,
+        networkPassword: _discovery.networkPassword,
+      );
+    }
+
+    await _discovery.refreshDiscovery();
+    notifyListeners();
   }
 
   Future<void> setNetworkPassword(String? password) async {
