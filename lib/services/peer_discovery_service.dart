@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -13,6 +14,7 @@ class PeerDiscoveryService extends ChangeNotifier {
   String? _myDeviceName;
   String? _currentIp;
   String? _networkPassword;
+  Timer? _noPeersWarningTimer;
 
   List<PeerDevice> get peers => _peers;
   MdnsService get mdns => _mdns;
@@ -46,28 +48,39 @@ class PeerDiscoveryService extends ChangeNotifier {
   }
 
   Future<void> startDiscovery() async {
+    _scheduleNoPeersWarning();
     await _mdns.startDiscovery();
   }
 
   Future<void> stopDiscovery() async {
+    _noPeersWarningTimer?.cancel();
     await _mdns.stopDiscovery();
   }
 
   Future<void> refreshDiscovery() async {
+    _noPeersWarningTimer?.cancel();
     await _mdns.stopDiscovery();
     _peers.clear();
     notifyListeners();
+    _scheduleNoPeersWarning();
     await _mdns.startDiscovery();
     await _updatePeersFromMdns();
+  }
+
+  void _scheduleNoPeersWarning() {
+    _noPeersWarningTimer?.cancel();
+    _noPeersWarningTimer = Timer(const Duration(seconds: 12), () {
+      if (_peers.isEmpty && _mdns.services.isEmpty) {
+        LogService.warn('Discovery', 'Устройства не обнаружены за 12 сек. Возможные причины в этой сети: 1) включена изоляция клиентов (AP/Client Isolation); 2) заблокирован Multicast/mDNS (224.0.0.251:5353); 3) устройства находятся в разных VLAN/подсетях.');
+      }
+    });
   }
 
   void removePeer(PeerDevice peer) {
     final beforeCount = _peers.length;
     _peers.removeWhere((p) => p.id == peer.id || (p.host == peer.host && p.port == peer.port));
     if (_peers.length != beforeCount) {
-      if (kDebugMode) {
-        LogService.warn('Discovery', 'Пир оффлайн, удален из списка: ${peer.name} (${peer.host})');
-      }
+      LogService.warn('Discovery', 'Пир оффлайн, удален из списка: ${peer.name} (${peer.host})');
       notifyListeners();
     }
   }
@@ -98,7 +111,7 @@ class PeerDiscoveryService extends ChangeNotifier {
           continue;
         }
       } else if (servicePassword != null && servicePassword.isNotEmpty) {
-        LogService.warn('Discovery', 'Устройство "$serviceName" пропущено: защищено паролем');
+        LogService.warn('Discovery', 'Устройство "$serviceName" пропущено: защищено паролем сети');
         continue;
       }
 
@@ -134,22 +147,22 @@ class PeerDiscoveryService extends ChangeNotifier {
       // 4. Fallback-резолвинг хостнейма
       if (resolvedIp == null) {
         if (serviceHost.contains(':') || serviceHost.contains('%')) {
-          if (kDebugMode) print('Пропускаем IPv6 адрес: $serviceHost');
+          LogService.debug('Discovery', 'Пропускаем IPv6 адрес: $serviceHost');
           continue;
         }
 
-        if (kDebugMode) print('Разрешаем имя: $serviceHost');
+        LogService.debug('Discovery', 'Резолвинг хостнейма: $serviceHost');
         resolvedIp = await NetworkUtils.resolveLocalHostname(serviceHost);
       }
 
       if (resolvedIp == null) {
-        LogService.warn('Discovery', 'Не удалось определить IP для хоста "$serviceHost"');
+        LogService.warn('Discovery', 'Не удалось определить IP для хоста "$serviceHost" (устройство "$serviceName")');
         continue;
       }
 
       // Пропускаем собственный IP
       if (_currentIp != null && resolvedIp == _currentIp) {
-        if (kDebugMode) print('Пропускаем свой собственный IP: $resolvedIp');
+        LogService.debug('Discovery', 'Пропуск своего собственного IP: $resolvedIp');
         continue;
       }
 
@@ -170,13 +183,7 @@ class PeerDiscoveryService extends ChangeNotifier {
     }
 
     notifyListeners();
-
-    if (kDebugMode) {
-      LogService.info('Discovery', 'Активных устройств в сети: ${_peers.length}');
-      for (var p in _peers) {
-        print('   - ${p.name} (${p.host}:${p.port})');
-      }
-    }
+    LogService.info('Discovery', 'Активных устройств в списке: ${_peers.length}');
   }
 
   String? _getPasswordFromService(nsd.Service service) {
@@ -205,6 +212,7 @@ class PeerDiscoveryService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _noPeersWarningTimer?.cancel();
     _mdns.removeListener(_onMdnsChanged);
     _mdns.unregisterService();
     _mdns.stopDiscovery();

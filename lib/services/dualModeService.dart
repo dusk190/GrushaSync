@@ -65,6 +65,9 @@ class DualModeService extends ChangeNotifier {
     await _loadNetworkPassword();
     await PermissionService.ensurePermissions();
 
+    // Сбор данных о сети при запуске
+    await NetworkUtils.logNetworkDiagnostics();
+
     _currentIp = await NetworkUtils.getLocalIp();
 
     final customName = ConfigService.customDeviceName;
