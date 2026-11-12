@@ -141,19 +141,36 @@ class MyHomePageState extends State<MyHomePage> {
             actions: [
               // При нажатии кнопки настроек выдвигаются вниз
               SpeedDial(
-                icon: Icons.settings,
-                iconTheme: IconThemeData(
-                    color: Theme.of(context).colorScheme.onSecondary
-                ),
-                activeIcon: Icons.close,
-                backgroundColor: Theme.of(context).colorScheme.secondary,
-                shape: CircleBorder(
-                    side: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 3,
+                dialRoot: (context, open, toggleChildren) {
+                  return Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondary,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 3,
+                      ),
                     ),
-                  ),
-
+                    child: Material(
+                      color: Colors.transparent,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: toggleChildren,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: Icon(
+                            open ? Icons.close : Icons.settings,
+                            key: ValueKey<bool>(open),
+                            color: Theme.of(context).colorScheme.onSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
                 childrenButtonSize: const Size(46, 46),
                 elevation: 0,
                 spacing: 7,
