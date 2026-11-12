@@ -2,8 +2,36 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'log_service.dart';
 
 class NetworkUtils {
+  /// Проверка, является ли сетевой интерфейс виртуальным или VPN
+  static bool isVirtualInterface(String name) {
+    final lower = name.toLowerCase();
+    return lower.contains('virtual') ||
+        lower.contains('vmware') ||
+        lower.contains('vbox') ||
+        lower.contains('wsl') ||
+        lower.contains('docker') ||
+        lower.contains('tailscale') ||
+        lower.contains('hamachi') ||
+        lower.contains('radmin') ||
+        lower.contains('fam') ||
+        lower.contains('wireguard') ||
+        lower.contains('zerotier') ||
+        lower.contains('tap') ||
+        lower.contains('tun') ||
+        lower.contains('vpn') ||
+        lower.contains('vethernet') ||
+        lower.contains('hyper-v') ||
+        lower.contains('loopback') ||
+        lower.contains('bluetooth') ||
+        lower.contains('pseudo') ||
+        lower.contains('teredo') ||
+        lower.contains('pcap');
+  }
+
   /// Получение локального IPv4-адреса устройства.
   /// На мобильных платформах опрашивает Wi-Fi, на десктопе отсекает VPN и виртуальные интерфейсы.
   static Future<String?> getLocalIp() async {
@@ -12,11 +40,11 @@ class NetworkUtils {
         final info = NetworkInfo();
         final wifiIp = await info.getWifiIP();
         if (wifiIp != null && wifiIp.isNotEmpty && wifiIp != '0.0.0.0') {
-          if (kDebugMode) print('Найден Wi-Fi IP через NetworkInfo: $wifiIp');
+          LogService.info('Network', 'Найден Wi-Fi IP через NetworkInfo: $wifiIp');
           return wifiIp;
         }
       } catch (e) {
-        if (kDebugMode) print('Ошибка получения Wi-Fi IP: $e');
+        LogService.warn('Network', 'Не удалось получить Wi-Fi IP через NetworkInfo: $e');
       }
     }
 
@@ -26,35 +54,10 @@ class NetworkUtils {
         includeLinkLocal: false,
       );
 
-      bool isVirtual(String name) {
-        final lower = name.toLowerCase();
-        return lower.contains('virtual') ||
-            lower.contains('vmware') ||
-            lower.contains('vbox') ||
-            lower.contains('wsl') ||
-            lower.contains('docker') ||
-            lower.contains('tailscale') ||
-            lower.contains('hamachi') ||
-            lower.contains('radmin') ||
-            lower.contains('fam') ||
-            lower.contains('wireguard') ||
-            lower.contains('zerotier') ||
-            lower.contains('tap') ||
-            lower.contains('tun') ||
-            lower.contains('vpn') ||
-            lower.contains('vethernet') ||
-            lower.contains('hyper-v') ||
-            lower.contains('loopback') ||
-            lower.contains('bluetooth') ||
-            lower.contains('pseudo') ||
-            lower.contains('teredo') ||
-            lower.contains('pcap');
-      }
-
       final candidates = <_CandidateIp>[];
 
       for (var interface in interfaces) {
-        final virtual = isVirtual(interface.name);
+        final virtual = isVirtualInterface(interface.name);
         for (var addr in interface.addresses) {
           if (addr.type != InternetAddressType.IPv4) continue;
           final ip = addr.address;
@@ -97,17 +100,92 @@ class NetworkUtils {
 
       if (candidates.isNotEmpty) {
         candidates.sort((a, b) => b.score.compareTo(a.score));
-        if (kDebugMode) {
-          for (var c in candidates) {
-            print('IP-кандидат: ${c.ip} (${c.interfaceName}) score=${c.score}');
-          }
+        for (var c in candidates) {
+          LogService.debug('Network', 'IP-кандидат: ${c.ip} (${c.interfaceName}) score=${c.score}');
         }
-        return candidates.first.ip;
+        final chosen = candidates.first.ip;
+        LogService.info('Network', 'Выбран локальный IP через адаптер "${candidates.first.interfaceName}": $chosen');
+        return chosen;
+      } else {
+        LogService.warn('Network', 'Не найдено подходящих IPv4 кандидатов среди интерфейсов');
       }
     } catch (e) {
-      if (kDebugMode) print('Ошибка NetworkInterface: $e');
+      LogService.error('Network', 'Ошибка перечисления NetworkInterface', e);
     }
     return null;
+  }
+
+  /// Полная диагностика сети с подробной записью параметров в LogService
+  static Future<void> logNetworkDiagnostics() async {
+    LogService.info('Network', '================= ДИАГНОСТИКА СЕТИ =================');
+
+    // 1. Wi-Fi параметры
+    try {
+      final info = NetworkInfo();
+      final wifiName = await info.getWifiName();
+      final wifiBSSID = await info.getWifiBSSID();
+      final wifiIp = await info.getWifiIP();
+      final wifiGateway = await info.getWifiGatewayIP();
+      final wifiSubmask = await info.getWifiSubmask();
+      final wifiBroadcast = await info.getWifiBroadcast();
+      final wifiIPv6 = await info.getWifiIPv6();
+
+      LogService.info('Network', '[Wi-Fi] Имя сети (SSID): ${wifiName ?? "недоступно (на Android нужен доступ к геопозиции)"}');
+      LogService.info('Network', '[Wi-Fi] MAC точки (BSSID): ${wifiBSSID ?? "недоступно"}');
+      LogService.info('Network', '[Wi-Fi] IP устройства: ${wifiIp ?? "не определен"} | Шлюз (роутер): ${wifiGateway ?? "н/д"} | Маска: ${wifiSubmask ?? "н/д"}');
+      LogService.info('Network', '[Wi-Fi] Broadcast: ${wifiBroadcast ?? "н/д"} | IPv6: ${wifiIPv6 ?? "н/д"}');
+    } catch (e) {
+      LogService.warn('Network', 'Сбой чтения данных Wi-Fi: $e');
+    }
+
+    // 2. Сетевые адаптеры ОС
+    try {
+      final interfaces = await NetworkInterface.list(
+        includeLoopback: false,
+        includeLinkLocal: false,
+      );
+
+      LogService.info('Network', '[Сетевые интерфейсы ОС (${interfaces.length} шт.)]:');
+      for (var iface in interfaces) {
+        final isVirt = isVirtualInterface(iface.name);
+        final addrs = iface.addresses.map((a) => '${a.address} (${a.type.name})').join(', ');
+        final tag = isVirt ? ' [ВИРТУАЛЬНЫЙ/VPN]' : ' [ФИЗИЧЕСКИЙ]';
+        LogService.info('Network', '  • "${iface.name}"$tag: $addrs');
+      }
+    } catch (e) {
+      LogService.warn('Network', 'Сбой перечисления сетевых интерфейсов: $e');
+    }
+
+    // 3. Выбранный локальный IP
+    final chosenIp = await getLocalIp();
+    LogService.info('Network', '[Выбранный рабочий IP]: ${chosenIp ?? "НЕ ОПРЕДЕЛЕН"}');
+
+    // 4. Проверка DNS и выхода в интернет
+    try {
+      final lookup = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 2));
+      if (lookup.isNotEmpty && lookup.first.rawAddress.isNotEmpty) {
+        LogService.info('Network', '[Связь/Интернет] Доступ в Интернет есть (DNS резолвится корректно)');
+      }
+    } catch (e) {
+      LogService.warn('Network', '[Связь/Интернет] Нет доступа в Интернет или заблокирован DNS (возможен Captive Portal / изоляция клиентов)');
+    }
+
+    // 5. Диагностический анализ подсети
+    if (chosenIp != null) {
+      if (chosenIp.startsWith('192.168.')) {
+        LogService.info('Network', '[Анализ] Стандартная домашняя/офисная подсеть Class C (192.168.x.x)');
+      } else if (chosenIp.startsWith('10.')) {
+        LogService.info('Network', '[Анализ] Корпоративная подсеть Class A (10.x.x.x). Внимание: в крупных сетях телефоны и ПК часто изолируют в разные VLAN!');
+      } else if (_isPrivate172(chosenIp)) {
+        LogService.info('Network', '[Анализ] Корпоративная подсеть Class B (172.16-31.x.x)');
+      } else if (chosenIp.startsWith('169.254.')) {
+        LogService.error('Network', '[Анализ] Link-Local/APIPA (169.254.x.x) — DHCP сервер роутера не выдал IP-адрес!');
+      } else {
+        LogService.warn('Network', '[Анализ] Нестандартный/публичный адрес: $chosenIp');
+      }
+    }
+
+    LogService.info('Network', '====================================================');
   }
 
   static bool _isPrivate172(String ip) {
@@ -160,7 +238,7 @@ class NetworkUtils {
 
       for (var addr in addresses) {
         if (addr.type == InternetAddressType.IPv4) {
-          if (kDebugMode) print('Разрешено (IPv4): ${addr.address}');
+          LogService.debug('Network', 'Хостнейм $hostname разрешен (IPv4): ${addr.address}');
           return addr.address;
         }
       }
@@ -173,16 +251,16 @@ class NetworkUtils {
 
         for (var addr in addresses) {
           if (addr.type == InternetAddressType.IPv4) {
-            if (kDebugMode) print('Разрешено без .local (IPv4): ${addr.address}');
+            LogService.debug('Network', 'Хостнейм разрешен без .local (IPv4): ${addr.address}');
             return addr.address;
           }
         }
       } catch (e) {
-        if (kDebugMode) print('Ошибка разрешения $hostname: $e');
+        LogService.warn('Network', 'Ошибка разрешения хостнейма $hostname: $e');
       }
     }
 
-    if (kDebugMode) print('IPv4 не найден для $hostname, пропускаем');
+    LogService.warn('Network', 'IPv4 не найден для $hostname, пропускаем');
     return null;
   }
 
@@ -197,6 +275,13 @@ class NetworkUtils {
     } else if (Platform.isLinux) {
       final home = Platform.environment['HOME'] ?? '/home/default';
       return Directory('$home/Downloads/GrushaSync');
+    } else if (Platform.isIOS) {
+      final docDir = await getApplicationDocumentsDirectory();
+      final grushaDir = Directory('${docDir.path}/GrushaSync');
+      if (!await grushaDir.exists()) {
+        await grushaDir.create(recursive: true);
+      }
+      return grushaDir;
     } else {
       const downloadsPath = '/storage/emulated/0/Download';
       final grushaDir = Directory('$downloadsPath/GrushaSync');
@@ -206,7 +291,7 @@ class NetworkUtils {
         }
         return grushaDir;
       } catch (e) {
-        if (kDebugMode) print('Не удалось создать папку GrushaSync: $e');
+        LogService.error('Network', 'Не удалось создать папку GrushaSync', e);
         return Directory(downloadsPath);
       }
     }

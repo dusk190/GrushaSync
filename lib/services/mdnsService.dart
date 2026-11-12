@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'log_service.dart';
 import 'package:nsd/nsd.dart' as nsd;
@@ -43,19 +42,14 @@ class MdnsService extends ChangeNotifier {
 
       notifyListeners();
 
-      if (kDebugMode) {
-
-        LogService.info('mDNS', 'Сервис "$serviceName" зарегистрирован в сети на порту $port${ip != null ? " (IP: $ip)" : ""}');
-        if (networkPassword != null && networkPassword.isNotEmpty){
-          print("Пароль установлен");
-        }
+      LogService.info('mDNS', 'Сервис "$serviceName" зарегистрирован в сети на порту $port${ip != null ? " (IP: $ip)" : ""}');
+      if (networkPassword != null && networkPassword.isNotEmpty){
+        LogService.info('mDNS', 'Пароль сети активирован для объявления');
       }
 
       return true;
     } catch (e) {
-      if (kDebugMode) {
-        LogService.error('mDNS', 'Ошибка регистрации сервиса "$serviceName"', e);
-      }
+      LogService.error('mDNS', 'Ошибка регистрации сервиса "$serviceName"', e);
       return false;
     }
   }
@@ -75,20 +69,16 @@ class MdnsService extends ChangeNotifier {
         _services.addAll(_discovery!.services);
         notifyListeners();
 
-        if (kDebugMode) {
-          print('🔍 mDNS: Найдено ${_services.length} сервисов');
+        LogService.info('mDNS', 'Событие mDNS: получено ${_services.length} объявлений сервисов');
+        for (var s in _services) {
+          LogService.debug('mDNS', '  -> объявление: "${s.name}" (хост: ${s.host}, порт: ${s.port})');
         }
       });
 
       notifyListeners();
-
-      if (kDebugMode) {
-        LogService.info('mDNS', 'Поиск устройств в сети запущен (тип: $serviceType)');
-      }
+      LogService.info('mDNS', 'Поиск устройств запущен в локальной сети (сервис: $serviceType)');
     } catch (e) {
-      if (kDebugMode) {
-        LogService.error('mDNS', 'Ошибка поиска устройств mDNS', e);
-      }
+      LogService.error('mDNS', 'Ошибка запуска mDNS поиска', e);
     }
   }
 
@@ -100,10 +90,7 @@ class MdnsService extends ChangeNotifier {
       _discovery = null;
       _services.clear();
       notifyListeners();
-
-      if (kDebugMode) {
-        print('mDNS: Поиск сервисов остановлен');
-      }
+      LogService.info('mDNS', 'Поиск mDNS остановлен');
     }
   }
 
@@ -114,10 +101,7 @@ class MdnsService extends ChangeNotifier {
       await nsd.unregister(registration);
       _registration = null;
       notifyListeners();
-
-      if (kDebugMode) {
-        print('mDNS: Регистрация сервиса остановлена');
-      }
+      LogService.info('mDNS', 'Регистрация сервиса mDNS остановлена');
     }
   }
 

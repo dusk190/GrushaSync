@@ -119,6 +119,24 @@ class _LogsPageState extends State<LogsPage> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.network_check, color: Colors.white70, size: 22),
+            tooltip: 'Диагностика данных сети',
+            onPressed: () async {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Сбор данных о сети...')),
+              );
+              await NetworkUtils.logNetworkDiagnostics();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Данные сети обновлены и записаны в лог'),
+                    backgroundColor: Colors.green[700],
+                  ),
+                );
+              }
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.save_alt, color: Colors.white70, size: 22),
             tooltip: 'Сохранить логи в файл GrushaSync',
             onPressed: _saveLogsToFile,
